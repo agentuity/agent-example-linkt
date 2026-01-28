@@ -1,147 +1,144 @@
-# linkt-launch
+# Linkt Outreach Planner
 
-A new Agentuity project created with `agentuity create`.
+An AI-powered outreach content generator that receives business signals from [Linkt](https://linkt.ai) and automatically creates personalized sales and marketing content.
 
-## What You Get
+## How It Works
 
-A fully configured Agentuity project with:
+```
+Linkt Webhook  -->  POST /api/webhook/linkt  -->  AI Agent (GPT-5-mini)
+                                                       |
+                                                       v
+                                             Generate Outreach:
+                                             - Email draft
+                                             - LinkedIn post
+                                             - Twitter/X post
+                                             - Call talking points
+                                                       |
+                                                       v
+                                                Store in KV  -->  React Frontend
+```
 
-- ✅ **TypeScript** - Full type safety out of the box
-- ✅ **Bun runtime** - Fast JavaScript runtime and package manager
-- ✅ **Hot reload** - Development server with auto-rebuild
-- ✅ **Example agent** - Sample "hello" agent to get started
-- ✅ **React frontend** - Pre-configured web interface
-- ✅ **API routes** - Example API endpoints
-- ✅ **Type checking** - TypeScript configuration ready to go
+1. **Linkt** detects business signals (funding rounds, leadership changes, product launches, etc.)
+2. **Webhook** sends signal data to this Agentuity agent
+3. **AI Agent** generates personalized outreach content for each signal
+4. **Frontend** displays signals with expandable cards showing all generated content
 
 ## Project Structure
 
 ```
-my-app/
-├── src/
-│   ├── agent/            # Agent definitions
-│   │   └── hello/
-│   │       ├── agent.ts  # Example agent
-│   │       └── index.ts  # Default exports
-│   ├── api/              # API definitions
-│   │   └── index.ts      # Example routes
-│   └── web/              # React web application
-│       ├── public/       # Static assets
-│       ├── App.tsx       # Main React component
-│       ├── frontend.tsx  # Entry point
-│       └── index.html    # HTML template
-├── AGENTS.md             # Agent guidelines
-├── app.ts                # Application entry point
-├── tsconfig.json         # TypeScript configuration
-├── package.json          # Dependencies and scripts
-└── README.md             # Project documentation
+src/
+├── agent/
+│   └── outreach-planner/
+│       ├── agent.ts        # Main agent - receives signals, stores to KV
+│       ├── generator.ts    # LLM outreach generation (GPT-5-mini)
+│       ├── types.ts        # TypeScript types
+│       └── index.ts        # Re-exports
+├── api/
+│   └── index.ts            # REST API routes
+└── web/
+    ├── App.tsx             # React frontend
+    ├── App.css             # Tailwind styles
+    └── frontend.tsx        # React entry point
 ```
 
-## Available Commands
+## API Endpoints
 
-After creating your project, you can run:
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/webhook/linkt` | Receive signals from Linkt (returns immediately, processes in background) |
+| GET | `/api/signals` | List all stored signals with outreach content |
+| GET | `/api/signals/:id` | Get a specific signal |
+| POST | `/api/signals/:id/regenerate` | Regenerate outreach for a signal |
+| DELETE | `/api/signals/:id` | Delete a signal |
+| GET | `/api/health` | Health check |
 
-### Development
+## Development
 
 ```bash
-bun dev
+# Install dependencies
+bun install
+
+# Start development server
+bun run dev
+
+# Open the frontend
+open http://localhost:3500
 ```
 
-Starts the development server at `http://localhost:3500`
+## Testing the Webhook
 
-### Build
+Send a test signal:
 
 ```bash
-bun build
+curl -X POST http://localhost:3500/api/webhook/linkt \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signal": {
+      "id": "sig_001",
+      "type": "funding",
+      "summary": "Acme Corp raised $10M Series A from Sequoia",
+      "company": "Acme Corp",
+      "strength": "HIGH",
+      "date": "2026-01-28"
+    }
+  }'
 ```
 
-Compiles your application into the `.agentuity/` directory
-
-### Type Check
+View stored signals:
 
 ```bash
-bun typecheck
+curl http://localhost:3500/api/signals
 ```
 
-Runs TypeScript type checking
+## Signal Types
 
-### Deploy to Agentuity
+The agent handles these signal types from Linkt:
+
+- `funding` - Funding rounds, investments
+- `leadership_change` - New executives, departures
+- `product_launch` - New products, features
+- `partnership` - Strategic partnerships
+- `acquisition` - M&A activity
+- `expansion` - Geographic or market expansion
+- `hiring_surge` - Significant hiring activity
+- `layoff` - Workforce reductions
+- `award` - Industry awards, recognition
+
+## Generated Outreach
+
+For each signal, the AI generates:
+
+- **Email Draft** - Subject line + personalized body (2-3 paragraphs)
+- **LinkedIn Post** - Thought-leadership style (2-3 sentences)
+- **Twitter/X Post** - Punchy, under 280 chars
+- **Call Talking Points** - 3 conversation starters for sales calls
+- **Summary** - Quick signal overview
+
+## Deployment
 
 ```bash
+# Build the project
+bun run build
+
+# Deploy to Agentuity cloud
 bun run deploy
 ```
 
-Deploys your application to the Agentuity cloud
-
-## Next Steps
-
-After creating your project:
-
-1. **Customize the example agent** - Edit `src/agent/hello/agent.ts`
-2. **Add new agents** - Create new folders in `src/agent/`
-3. **Add new APIs** - Create new folders in `src/api/`
-4. **Add Web files** - Create new routes in `src/web/`
-5. **Customize the UI** - Edit `src/web/app.tsx`
-6. **Configure your app** - Modify `app.ts` to add middleware, configure services, etc.
-
-## Creating Custom Agents
-
-Create a new agent by adding a folder in `src/agent/`:
-
-```typescript
-// src/agent/my-agent/agent.ts
-import { createAgent } from '@agentuity/runtime';
-import { s } from '@agentuity/schema';
-
-const agent = createAgent({
-	description: 'My amazing agent',
-	schema: {
-		input: s.object({
-			name: s.string(),
-		}),
-		output: s.string(),
-	},
-	handler: async (_ctx, { name }) => {
-		return `Hello, ${name}! This is my custom agent.`;
-	},
-});
-
-export default agent;
+After deploying, configure Linkt to send webhooks to:
+```
+https://your-project.agentuity.cloud/api/webhook/linkt
 ```
 
-## Adding API Routes
+## Environment Variables
 
-Create custom routes in `src/api/`:
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | OpenAI API key for GPT-5-mini |
 
-```typescript
-// src/api/my-agent/route.ts
-import { createRouter } from '@agentuity/runtime';
-import myAgent from './agent';
+## Tech Stack
 
-const router = createRouter();
-
-router.get('/', async (c) => {
-	const result = await myAgent.run({ message: 'Hello!' });
-	return c.json(result);
-});
-
-router.post('/', myAgent.validator(), async (c) => {
-	const data = c.req.valid('json');
-	const result = await myAgent.run(data);
-	return c.json(result);
-});
-
-export default router;
-```
-
-## Learn More
-
-- [Agentuity Documentation](https://agentuity.dev)
-- [Bun Documentation](https://bun.sh/docs)
-- [Hono Documentation](https://hono.dev/)
-- [Zod Documentation](https://zod.dev/)
-
-## Requirements
-
-- [Bun](https://bun.sh/) v1.0 or higher
-- TypeScript 5+
+- **Runtime**: [Bun](https://bun.sh)
+- **Framework**: [Agentuity](https://agentuity.dev)
+- **AI**: OpenAI GPT-5-mini
+- **Frontend**: React 19 + Tailwind CSS
+- **Storage**: Agentuity KV

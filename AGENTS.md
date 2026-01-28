@@ -1,64 +1,146 @@
-# Agent Guidelines for linkt-launch
+# Agent Guidelines: Linkt Outreach Planner
+
+## Project Overview
+
+This is an **Agentuity agent** that integrates with [Linkt](https://linkt.ai) to generate AI-powered sales/marketing outreach content from business signals.
+
+**Architecture**: Webhook-driven (Linkt pushes signals to us)
 
 ## Commands
 
-- **Build**: `bun run build` (compiles your application)
-- **Dev**: `bun run dev` (starts development server)
-- **Typecheck**: `bun run typecheck` (runs TypeScript type checking)
-- **Deploy**: `bun run deploy` (deploys your app to the Agentuity cloud)
+| Command | Description |
+|---------|-------------|
+| `bun run dev` | Start development server (http://localhost:3500) |
+| `bun run build` | Build for production |
+| `bun run typecheck` | Run TypeScript type checking |
+| `bun run deploy` | Deploy to Agentuity cloud |
 
-## Agent-Friendly CLI
+## Project Structure
 
-The Agentuity CLI is designed to be agent-friendly with programmatic interfaces, structured output, and comprehensive introspection.
-
-Read the [AGENTS.md](./node_modules/@agentuity/cli/AGENTS.md) file in the Agentuity CLI for more information on how to work with this project.
-
-## Instructions
-
-- This project uses Bun instead of NodeJS and TypeScript for all source code
-- This is an Agentuity Agent project
-
-## Web Frontend (src/web/)
-
-The `src/web/` folder contains your React frontend, which is automatically bundled by the Agentuity build system.
-
-**File Structure:**
-
-- `index.html` - Main HTML file with `<script type="module" src="./frontend.tsx">`
-- `frontend.tsx` - Entry point that renders the React app to `#root`
-- `App.tsx` - Your main React component
-- `public/` - Static assets (optional)
-
-**How It Works:**
-
-1. The build system automatically bundles `frontend.tsx` and all its imports (including `App.tsx`)
-2. The bundled JavaScript is placed in `.agentuity/web/chunk/`
-3. The HTML file is served at the root `/` route
-4. Script references like `./frontend.tsx` are automatically resolved to the bundled chunks
-
-**Key Points:**
-
-- Use proper TypeScript/TSX syntax - the bundler handles all compilation
-- No need for Babel or external bundlers
-- React is bundled into the output (no CDN needed)
-- Supports hot module reloading in dev mode with `import.meta.hot`
-- Components can use all modern React features and TypeScript
-
-**Example:**
-
-```tsx
-// src/web/App.tsx
-import { useState } from 'react';
-
-export function App() {
-	const [count, setCount] = useState(0);
-	return <button onClick={() => setCount((c) => c + 1)}>{count}</button>;
-}
+```
+src/
+├── agent/
+│   ├── outreach-planner.ts           # Barrel export (SDK workaround)
+│   └── outreach-planner/
+│       ├── agent.ts                  # Main agent handler
+│       ├── generator.ts              # LLM content generation
+│       ├── types.ts                  # TypeScript interfaces
+│       └── index.ts                  # Re-exports
+├── api/
+│   └── index.ts                      # REST API routes
+└── web/
+    ├── App.tsx                       # React frontend
+    ├── App.css                       # Tailwind styles
+    └── frontend.tsx                  # React entry point
 ```
 
-## Learn More
+## Key Patterns
 
-- [Agentuity Documentation](https://agentuity.dev)
-- [Bun Documentation](https://bun.sh/docs)
-- [Hono Documentation](https://hono.dev/)
-- [Zod Documentation](https://zod.dev/)
+### Webhook Processing
+
+The webhook endpoint uses `waitUntil` for background processing:
+
+```typescript
+api.post('/webhook/linkt', async (c) => {
+  const data = await c.req.json();
+  
+  // Process in background, respond immediately
+  c.waitUntil(async () => {
+    await outreachPlanner.run(data);
+  });
+  
+  return c.json({ received: true });
+});
+```
+
+### KV Storage
+
+Signals are stored in the `outreach-planner` KV namespace:
+- `signal:index` - Array of signal IDs
+- `signal:{id}` - Individual signal with outreach content
+
+Access in agents:
+```typescript
+await ctx.kv.set(namespace, key, value);
+const result = await ctx.kv.get<Type>(namespace, key);
+```
+
+Access in routes:
+```typescript
+await c.var.kv.set(namespace, key, value);
+const result = await c.var.kv.get<Type>(namespace, key);
+```
+
+### LLM Generation
+
+Uses OpenAI's `gpt-5-mini` model with JSON output format:
+
+```typescript
+const response = await openai.chat.completions.create({
+  model: 'gpt-5-mini',
+  messages: [...],
+  response_format: { type: 'json_object' },
+});
+```
+
+**Note**: `gpt-5-mini` does not support the `temperature` parameter.
+
+## Known Workarounds
+
+### Route Generator Bug
+
+The route generator imports `../agent/outreach-planner.js` but the agent is in a subfolder. Workaround: `src/agent/outreach-planner.ts` is a barrel file that re-exports from `./outreach-planner/agent`.
+
+### Output Schema Bug
+
+Cannot define output schema as a const before passing to `createAgent`. Must inline it:
+
+```typescript
+// This works
+createAgent('name', {
+  schema: {
+    output: s.object({ ... })  // Inline
+  }
+});
+
+// This breaks
+const OutputSchema = s.object({ ... });
+createAgent('name', {
+  schema: { output: OutputSchema }  // Doesn't work
+});
+```
+
+## Testing
+
+Send a test webhook:
+
+```bash
+curl -X POST http://localhost:3500/api/webhook/linkt \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signal": {
+      "id": "sig_test",
+      "type": "funding",
+      "summary": "Test company raised $5M",
+      "company": "Test Corp",
+      "strength": "HIGH",
+      "date": "2026-01-28"
+    }
+  }'
+```
+
+Check signals:
+```bash
+curl http://localhost:3500/api/signals
+```
+
+## Environment
+
+- **Runtime**: Bun
+- **LLM**: OpenAI (requires `OPENAI_API_KEY`)
+- **Storage**: Agentuity KV
+
+## References
+
+- [Agentuity CLI AGENTS.md](./node_modules/@agentuity/cli/AGENTS.md)
+- [Agentuity Docs](https://agentuity.dev)

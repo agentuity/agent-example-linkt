@@ -1,383 +1,320 @@
-import { useAnalytics, useAPI } from '@agentuity/react';
-import { type ChangeEvent, Fragment, useCallback, useState } from 'react';
+import { useAPI } from '@agentuity/react';
+import { useCallback, useState, useEffect } from 'react';
 import './App.css';
 
-const WORKBENCH_PATH = process.env.AGENTUITY_PUBLIC_WORKBENCH_PATH;
-const LANGUAGES = ['Spanish', 'French', 'German', 'Chinese'] as const;
-const MODELS = ['gpt-5-nano', 'gpt-5-mini', 'gpt-5'] as const;
-const DEFAULT_TEXT =
-	'Welcome to Agentuity! This translation agent shows what you can build with the platform. It connects to AI models through our gateway, tracks usage with thread state, and runs quality checks automatically. Try translating this text into different languages to see the agent in action, and check the terminal for more details.';
+// Types
+interface Signal {
+	id: string;
+	type: string;
+	summary: string;
+	company: string;
+	strength: 'HIGH' | 'MEDIUM' | 'LOW';
+	date: string;
+}
+
+interface Outreach {
+	email: { subject: string; body: string };
+	linkedin: string;
+	twitter: string;
+	callPoints: string[];
+	summary: string;
+}
+
+interface StoredSignal {
+	signal: Signal;
+	outreach: Outreach;
+	generatedAt: string;
+	status: 'pending' | 'generated' | 'error';
+	error?: string;
+}
+
+interface SignalListResponse {
+	signals: StoredSignal[];
+	total: number;
+}
+
+interface UseAPIResponse {
+	data: SignalListResponse | undefined;
+	isLoading: boolean;
+	error: Error | null;
+	refetch: () => Promise<void>;
+}
+
+// Signal type colors
+const SIGNAL_COLORS: Record<string, string> = {
+	funding: 'bg-green-900 border-green-500 text-green-400',
+	leadership_change: 'bg-purple-900 border-purple-500 text-purple-400',
+	product_launch: 'bg-blue-900 border-blue-500 text-blue-400',
+	partnership: 'bg-cyan-900 border-cyan-500 text-cyan-400',
+	acquisition: 'bg-orange-900 border-orange-500 text-orange-400',
+	expansion: 'bg-teal-900 border-teal-500 text-teal-400',
+	hiring_surge: 'bg-lime-900 border-lime-500 text-lime-400',
+	layoff: 'bg-red-900 border-red-500 text-red-400',
+	award: 'bg-yellow-900 border-yellow-500 text-yellow-400',
+};
+
+const STRENGTH_COLORS: Record<string, string> = {
+	HIGH: 'text-red-400',
+	MEDIUM: 'text-yellow-400',
+	LOW: 'text-gray-400',
+};
+
+function CopyButton({ text, label }: { text: string; label: string }) {
+	const [copied, setCopied] = useState(false);
+
+	const handleCopy = useCallback(async () => {
+		await navigator.clipboard.writeText(text);
+		setCopied(true);
+		setTimeout(() => setCopied(false), 2000);
+	}, [text]);
+
+	return (
+		<button
+			onClick={handleCopy}
+			className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 text-gray-400 hover:text-white transition-colors"
+			type="button"
+		>
+			{copied ? 'Copied!' : label}
+		</button>
+	);
+}
+
+function SignalCard({ stored, isExpanded, onToggle }: {
+	stored: StoredSignal;
+	isExpanded: boolean;
+	onToggle: () => void;
+}) {
+	const { signal, outreach, generatedAt, status } = stored;
+	const colorClass = SIGNAL_COLORS[signal.type] || 'bg-gray-900 border-gray-500 text-gray-400';
+
+	return (
+		<div className="bg-black border border-gray-800 rounded-lg overflow-hidden">
+			{/* Header - Always visible */}
+			<button
+				onClick={onToggle}
+				className="w-full p-4 flex items-center justify-between hover:bg-gray-900/50 transition-colors text-left"
+				type="button"
+			>
+				<div className="flex items-center gap-4">
+					<span className={`text-xs px-2 py-1 rounded border ${colorClass}`}>
+						{signal.type.replace(/_/g, ' ')}
+					</span>
+					<div>
+						<h3 className="text-white font-medium">{signal.company}</h3>
+						<p className="text-gray-400 text-sm line-clamp-1">{signal.summary}</p>
+					</div>
+				</div>
+				<div className="flex items-center gap-4">
+					<span className={`text-xs font-medium ${STRENGTH_COLORS[signal.strength]}`}>
+						{signal.strength}
+					</span>
+					<span className="text-gray-500 text-xs">
+						{new Date(signal.date).toLocaleDateString()}
+					</span>
+					<svg
+						className={`w-5 h-5 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+					</svg>
+				</div>
+			</button>
+
+			{/* Expanded Content */}
+			{isExpanded && (
+				<div className="border-t border-gray-800 p-4 space-y-6">
+					{status === 'error' ? (
+						<div className="bg-red-900/30 border border-red-800 rounded p-4 text-red-400">
+							Failed to generate outreach: {stored.error}
+						</div>
+					) : (
+						<>
+							{/* Summary */}
+							<div>
+								<h4 className="text-sm text-gray-400 mb-2 flex items-center justify-between">
+									Signal Summary
+									<CopyButton text={outreach.summary} label="Copy" />
+								</h4>
+								<p className="text-white text-sm bg-gray-900 rounded p-3 border border-gray-800">
+									{outreach.summary}
+								</p>
+							</div>
+
+							{/* Email Draft */}
+							<div>
+								<h4 className="text-sm text-gray-400 mb-2 flex items-center justify-between">
+									Email Draft
+									<CopyButton text={`Subject: ${outreach.email.subject}\n\n${outreach.email.body}`} label="Copy Email" />
+								</h4>
+								<div className="bg-gray-900 rounded p-3 border border-gray-800 space-y-2">
+									<p className="text-cyan-400 text-sm">
+										<span className="text-gray-500">Subject:</span> {outreach.email.subject}
+									</p>
+									<p className="text-white text-sm whitespace-pre-wrap">{outreach.email.body}</p>
+								</div>
+							</div>
+
+							{/* Social Posts */}
+							<div className="grid grid-cols-2 gap-4">
+								<div>
+									<h4 className="text-sm text-gray-400 mb-2 flex items-center justify-between">
+										LinkedIn
+										<CopyButton text={outreach.linkedin} label="Copy" />
+									</h4>
+									<p className="text-white text-sm bg-gray-900 rounded p-3 border border-gray-800">
+										{outreach.linkedin}
+									</p>
+								</div>
+								<div>
+									<h4 className="text-sm text-gray-400 mb-2 flex items-center justify-between">
+										Twitter/X
+										<CopyButton text={outreach.twitter} label="Copy" />
+									</h4>
+									<p className="text-white text-sm bg-gray-900 rounded p-3 border border-gray-800">
+										{outreach.twitter}
+									</p>
+								</div>
+							</div>
+
+							{/* Call Talking Points */}
+							<div>
+								<h4 className="text-sm text-gray-400 mb-2 flex items-center justify-between">
+									Call Talking Points
+									<CopyButton text={outreach.callPoints.join('\n')} label="Copy All" />
+								</h4>
+								<ul className="bg-gray-900 rounded p-3 border border-gray-800 space-y-1">
+									{outreach.callPoints.map((point, i) => (
+										<li key={i} className="text-white text-sm flex items-start gap-2">
+											<span className="text-cyan-400">-</span>
+											{point}
+										</li>
+									))}
+								</ul>
+							</div>
+
+							{/* Metadata */}
+							<div className="text-xs text-gray-500 pt-2 border-t border-gray-800">
+								Generated: {new Date(generatedAt).toLocaleString()}
+							</div>
+						</>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
 
 export function App() {
-	const [text, setText] = useState(DEFAULT_TEXT);
-	const [toLanguage, setToLanguage] = useState<(typeof LANGUAGES)[number]>('Spanish');
-	const [model, setModel] = useState<(typeof MODELS)[number]>('gpt-5-nano');
+	const [expandedId, setExpandedId] = useState<string | null>(null);
 
-	// RESTful API hooks for translation operations
-	const { data: historyData, refetch: refetchHistory } = useAPI('GET /api/translate/history');
+	// Fetch signals
+	const { data, isLoading, error, refetch } = useAPI({
+		method: 'GET',
+		path: '/api/signals',
+	}) as unknown as UseAPIResponse;
 
-	const { data: translateResult, invoke: translate, isLoading } = useAPI('POST /api/translate');
+	// Auto-refresh every 10 seconds
+	useEffect(() => {
+		const interval = setInterval(() => {
+			refetch();
+		}, 10000);
+		return () => clearInterval(interval);
+	}, [refetch]);
 
-	const { invoke: clearHistory } = useAPI('DELETE /api/translate/history');
-
-	const { track } = useAnalytics();
-
-	// Prefer fresh data from translation, fall back to initial fetch
-	const history = translateResult?.history ?? historyData?.history ?? [];
-	const threadId = translateResult?.threadId ?? historyData?.threadId;
-
-	const handleTranslate = useCallback(async () => {
-		track('translate', {
-			text,
-			toLanguage,
-			model,
-		});
-		await translate({ text, toLanguage, model });
-	}, [text, toLanguage, model, translate, track]);
-
-	const handleClearHistory = useCallback(async () => {
-		track('clear_history');
-		await clearHistory();
-		await refetchHistory();
-	}, [clearHistory, refetchHistory, track]);
+	const handleRefresh = useCallback(() => {
+		refetch();
+	}, [refetch]);
 
 	return (
 		<div className="text-white flex font-sans justify-center min-h-screen">
-			<div className="flex flex-col gap-4 max-w-3xl p-16 w-full">
+			<div className="flex flex-col gap-4 max-w-4xl p-8 w-full">
 				{/* Header */}
-				<div className="items-center flex flex-col gap-2 justify-center mb-8 relative text-center">
-					<svg
-						aria-hidden="true"
-						className="h-auto mb-4 w-12"
-						fill="none"
-						height="191"
-						viewBox="0 0 220 191"
-						width="220"
-						xmlns="http://www.w3.org/2000/svg"
+				<div className="flex items-center justify-between mb-4">
+					<div>
+						<h1 className="text-3xl font-light text-white">Outreach Planner</h1>
+						<p className="text-gray-400">
+							Real-time signal intelligence from{' '}
+							<span className="italic font-serif text-cyan-400">Linkt</span>
+						</p>
+					</div>
+					<button
+						onClick={handleRefresh}
+						className="text-sm px-4 py-2 bg-gray-900 hover:bg-gray-800 rounded border border-gray-700 text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+						type="button"
 					>
-						<path
-							clipRule="evenodd"
-							d="M220 191H0L31.427 136.5H0L8 122.5H180.5L220 191ZM47.5879 136.5L24.2339 177H195.766L172.412 136.5H47.5879Z"
-							fill="var(--color-cyan-500)"
-							fillRule="evenodd"
-						/>
-						<path
-							clipRule="evenodd"
-							d="M110 0L157.448 82.5H189L197 96.5H54.5L110 0ZM78.7021 82.5L110 28.0811L141.298 82.5H78.7021Z"
-							fill="var(--color-cyan-500)"
-							fillRule="evenodd"
-						/>
-					</svg>
-
-					<h1 className="text-5xl font-thin">Welcome to Agentuity</h1>
-
-					<p className="text-gray-400 text-lg">
-						The <span className="italic font-serif">Full-Stack</span> Platform for AI Agents
-					</p>
+						<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+						</svg>
+						Refresh
+					</button>
 				</div>
 
-				{/* Translate Form */}
-				<div className="bg-black border border-gray-900 text-gray-400 rounded-lg p-8 shadow-2xl flex flex-col gap-6 ">
-					<div className="items-center flex flex-wrap gap-1.5">
-						Translate to
-						<select
-							className="appearance-none bg-transparent border-0 border-b border-dashed border-gray-700 text-white cursor-pointer font-normal outline-none hover:border-b-cyan-400 focus:border-b-cyan-400 -mb-0.5"
-							disabled={isLoading}
-							onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-								setToLanguage(e.currentTarget.value as (typeof LANGUAGES)[number])
-							}
-							value={toLanguage}
-						>
-							{LANGUAGES.map((lang) => (
-								<option key={lang} value={lang}>
-									{lang}
-								</option>
-							))}
-						</select>
-						using
-						<select
-							className="appearance-none bg-transparent border-0 border-b border-dashed border-gray-700 text-white cursor-pointer font-normal outline-none hover:border-b-cyan-400 focus:border-b-cyan-400 -mb-0.5"
-							disabled={isLoading}
-							onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-								setModel(e.currentTarget.value as (typeof MODELS)[number])
-							}
-							value={model}
-						>
-							<option value="gpt-5-nano">GPT-5 Nano</option>
-							<option value="gpt-5-mini">GPT-5 Mini</option>
-							<option value="gpt-5">GPT-5</option>
-						</select>
-						<div className="relative group ml-auto z-0">
-							<div className="absolute inset-0 bg-linear-to-r from-cyan-700 via-blue-500 to-purple-600 rounded-lg blur-xl opacity-75 group-hover:blur-2xl group-hover:opacity-100 transition-all duration-700" />
-
-							<div className="absolute inset-0 bg-cyan-500/50 rounded-lg blur-3xl opacity-50" />
-
-							<button
-								className="relative font-semibold text-white px-4 py-2 bg-gray-950 rounded-lg shadow-2xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-								disabled={isLoading}
-								onClick={handleTranslate}
-								type="button"
-								data-loading={isLoading}
-							>
-								{isLoading ? 'Translating' : 'Translate'}
-							</button>
+				{/* Loading State */}
+				{isLoading && (
+					<div className="bg-black border border-gray-800 rounded-lg p-8">
+						<div className="flex items-center gap-3 text-gray-400">
+							<div className="animate-spin h-5 w-5 border-2 border-cyan-500 border-t-transparent rounded-full" />
+							<span>Loading signals...</span>
 						</div>
 					</div>
+				)}
 
-					<textarea
-						className="text-sm bg-gray-950 border border-gray-800 rounded-md text-white resize-y py-3 px-4 min-h-28 focus:outline-cyan-500 focus:outline-2 focus:outline-offset-2 z-10"
-						disabled={isLoading}
-						onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setText(e.currentTarget.value)}
-						placeholder="Enter text to translate..."
-						rows={4}
-						value={text}
-					/>
-
-					{/* Translation Result */}
-					{isLoading ? (
-						<div
-							className="text-sm bg-gray-950 border border-gray-800 rounded-md text-gray-600 py-3 px-4"
-							data-loading
-						/>
-					) : !translateResult?.translation ? (
-						<div className="text-sm bg-gray-950 border border-gray-800 rounded-md text-gray-600 py-3 px-4">
-							Translation will appear here
-						</div>
-					) : (
-						<div className="flex flex-col gap-3">
-							<div className="text-sm bg-gray-950 border border-gray-800 rounded-md text-cyan-500 py-3 px-4">
-								{translateResult.translation}
-							</div>
-
-							<div className="text-gray-500 flex text-xs gap-4">
-								{translateResult.tokens > 0 && (
-									<span>
-										Tokens{' '}
-										<strong className="text-gray-400">{translateResult.tokens}</strong>
-									</span>
-								)}
-
-								{translateResult.threadId && (
-									<span className="group border-b border-dashed border-gray-700 cursor-help relative transition-colors duration-200 hover:border-b-cyan-400">
-										<span>
-											Thread{' '}
-											<strong className="text-gray-400">
-												{translateResult.threadId.slice(0, 12)}...
-											</strong>
-										</span>
-
-										{/* Pop-up */}
-										<div className="group-hover:flex hidden absolute left-1/2 -translate-x-1/2 bg-gray-900 border border-gray-800 rounded-lg p-4 leading-normal z-10 mb-2 shadow-2xl text-left w-72 bottom-full flex-col gap-2">
-											<div className="text-base text-white font-semibold">Thread ID</div>
-
-											<p className="text-gray-400">
-												Your{' '}
-												<strong className="text-gray-200">conversation context</strong>{' '}
-												that persists across requests. All translations share this
-												thread, letting the agent remember history.
-											</p>
-
-											<p className="text-gray-400">
-												Each request gets a unique session ID, but the{' '}
-												<strong className="text-gray-200">thread stays the same</strong>
-												.
-											</p>
-										</div>
-									</span>
-								)}
-
-								{translateResult.sessionId && (
-									<span className="group border-b border-dashed border-gray-700 cursor-help relative transition-colors duration-200 hover:border-b-cyan-400">
-										<span>
-											Session{' '}
-											<strong className="text-gray-400">
-												{translateResult.sessionId.slice(0, 12)}...
-											</strong>
-										</span>
-
-										{/* Pop-up */}
-										<div className="group-hover:flex hidden absolute left-1/2 -translate-x-1/2 -translate-y-2 bg-gray-900 border border-gray-800 rounded-lg p-4 leading-normal z-10 shadow-2xl text-left w-72 bottom-full flex-col gap-2">
-											<div className="text-base text-white font-semibold">
-												Session ID
-											</div>
-
-											<p className="text-gray-400">
-												A <strong className="text-gray-200">unique identifier</strong>{' '}
-												for this specific request. Useful for debugging and tracing
-												individual operations in your agent logs.
-											</p>
-
-											<p className="text-gray-400">
-												Unlike threads, sessions are{' '}
-												<strong className="text-gray-200">unique per request</strong>.
-											</p>
-										</div>
-									</span>
-								)}
-							</div>
-						</div>
-					)}
-				</div>
-
-				<div className="bg-black border border-gray-900 rounded-lg p-8 flex flex-col gap-6">
-					<div className="items-center flex justify-between">
-						<h3 className="text-white text-xl font-normal">Recent Translations</h3>
-
-						{history.length > 0 && (
-							<button
-								className="bg-transparent border border-gray-900 rounded text-gray-500 cursor-pointer text-xs transition-all duration-200 py-1.5 px-3 hover:bg-gray-900 hover:border-gray-700 hover:text-white"
-								onClick={handleClearHistory}
-								type="button"
-							>
-								Clear
-							</button>
-						)}
+				{/* Error State */}
+				{error && (
+					<div className="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-400">
+						Failed to load signals: {error.message}
 					</div>
+				)}
 
-					<div className="bg-gray-950 rounded-md">
-						{history.length > 0 ? (
-							[...history].reverse().map((entry, index) => (
-								<button
-									key={`${entry.timestamp}-${index}`}
-									type="button"
-									tabIndex={0}
-									className="group items-center grid w-full text-xs gap-3 py-2 px-3 rounded cursor-help relative transition-colors duration-150 hover:bg-gray-900 focus:outline-none grid-cols-[minmax(0,min-content)_auto_1fr_auto] text-left"
-									aria-label={`Translation from ${entry.text} to ${entry.toLanguage}: ${entry.translation}`}
-								>
-									<span className="text-gray-400 truncate">{entry.text}</span>
-
-									<span className="text-gray-700 flex items-center gap-1">
-										→
-										<span className="bg-gray-900 border border-gray-800 rounded text-gray-400 text-center py-0.5 px-1">
-											{entry.toLanguage}
-										</span>
-									</span>
-
-									<span className="text-gray-400 truncate">{entry.translation}</span>
-
-									<span className="text-gray-600">{entry.sessionId.slice(0, 12)}...</span>
-
-									{/* Pop-up */}
-									<div className="group-hover:grid hidden absolute left-1/2 -translate-x-1/2 bg-gray-900 border border-gray-800 rounded-lg p-4 leading-normal z-10 mb-2 shadow-2xl text-left bottom-full gap-2 grid-cols-[auto_1fr_auto]">
-										{[
-											{
-												label: 'Model',
-												value: entry.model,
-												description: null,
-											},
-											{
-												label: 'Tokens',
-												value: entry.tokens,
-												description: null,
-											},
-											{
-												label: 'Thread',
-												value: `${threadId?.slice(0, 12)}...`,
-												description: '(Same for all)',
-											},
-											{
-												label: 'Session',
-												value: `${entry.sessionId.slice(0, 12)}...`,
-												description: '(Unique)',
-											},
-										].map((item) => (
-											<Fragment key={item.label}>
-												<span className="text-gray-500">{item.label}</span>
-												<span className="text-gray-200 font-medium">{item.value}</span>
-												<span className="text-gray-500 text-xs">
-													{item.description}
-												</span>
-											</Fragment>
-										))}
-									</div>
-								</button>
-							))
-						) : (
-							<div className="text-gray-600 text-sm py-2 px-3">History will appear here</div>
-						)}
+				{/* Empty State */}
+				{!isLoading && !error && data?.signals.length === 0 && (
+					<div className="bg-black border border-gray-800 rounded-lg p-12 text-center">
+						<div className="text-gray-500 mb-4">
+							<svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M13 10V3L4 14h7v7l9-11h-7z" />
+							</svg>
+							<p className="text-lg">No signals yet</p>
+							<p className="text-sm mt-2">Waiting for signals from Linkt webhooks...</p>
+						</div>
 					</div>
-				</div>
+				)}
 
-				<div className="bg-black border border-gray-900 rounded-lg p-8">
-					<h3 className="text-white text-xl font-normal leading-none m-0 mb-6">Next Steps</h3>
+				{/* Signal List */}
+				{data?.signals && data.signals.length > 0 && (
+					<div className="space-y-3">
+						<div className="flex items-center justify-between text-sm text-gray-500">
+							<span>{data.total} signal{data.total !== 1 ? 's' : ''}</span>
+							<span>Click to expand</span>
+						</div>
+						{data.signals.map((stored) => (
+							<SignalCard
+								key={stored.signal.id}
+								stored={stored}
+								isExpanded={expandedId === stored.signal.id}
+								onToggle={() => setExpandedId(expandedId === stored.signal.id ? null : stored.signal.id)}
+							/>
+						))}
+					</div>
+				)}
 
-					<div className="flex flex-col gap-6">
-						{[
-							{
-								key: 'customize-agent',
-								title: 'Customize your agent',
-								text: (
-									<>
-										Edit <code className="text-white">src/agent/translate/agent.ts</code>{' '}
-										to change how your agent responds.
-									</>
-								),
-							},
-							{
-								key: 'add-routes',
-								title: 'Add new API routes',
-								text: (
-									<>
-										Create new files in <code className="text-white">src/api/</code> to
-										expose more endpoints.
-									</>
-								),
-							},
-							{
-								key: 'update-frontend',
-								title: 'Update the frontend',
-								text: (
-									<>
-										Modify <code className="text-white">src/web/App.tsx</code> to build
-										your custom UI with Tailwind CSS.
-									</>
-								),
-							},
-							WORKBENCH_PATH
-								? {
-										key: 'workbench',
-										title: (
-											<>
-												Try{' '}
-												<a href={WORKBENCH_PATH} className="underline relative">
-													Workbench
-												</a>
-											</>
-										),
-										text: <>Test the translate agent directly in the dev UI.</>,
-									}
-								: null,
-						]
-							.filter((step): step is NonNullable<typeof step> => Boolean(step))
-							.map((step) => (
-								<div key={step.key} className="items-start flex gap-3">
-									<div className="items-center bg-green-950 border border-green-500 rounded flex size-4 shrink-0 justify-center">
-										<svg
-											aria-hidden="true"
-											className="size-2.5"
-											fill="none"
-											height="24"
-											stroke="var(--color-green-500)"
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth="2"
-											viewBox="0 0 24 24"
-											width="24"
-											xmlns="http://www.w3.org/2000/svg"
-										>
-											<path d="M20 6 9 17l-5-5"></path>
-										</svg>
-									</div>
-
-									<div>
-										<h4 className="text-white text-sm font-normal -mt-0.5 mb-0.5">
-											{step.title}
-										</h4>
-
-										<p className="text-gray-400 text-xs">{step.text}</p>
-									</div>
-								</div>
-							))}
+				{/* Info Footer */}
+				<div className="mt-8 bg-black border border-gray-800 rounded-lg p-6">
+					<h3 className="text-white text-sm font-medium mb-3">How it works</h3>
+					<div className="grid grid-cols-3 gap-4 text-xs text-gray-400">
+						<div className="flex items-start gap-2">
+							<span className="text-cyan-400">1.</span>
+							<span>Linkt detects business signals (funding, launches, etc.)</span>
+						</div>
+						<div className="flex items-start gap-2">
+							<span className="text-cyan-400">2.</span>
+							<span>Webhook sends signals to Agentuity agent</span>
+						</div>
+						<div className="flex items-start gap-2">
+							<span className="text-cyan-400">3.</span>
+							<span>AI generates personalized outreach content</span>
+						</div>
 					</div>
 				</div>
 			</div>
