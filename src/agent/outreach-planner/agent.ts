@@ -1,21 +1,14 @@
-/**
- * Outreach Planner Agent
- *
- * Receives signals from Linkt webhooks and generates outreach content.
- */
+/** Orchestrate signal enrichment and content generation. */
 
 import { createAgent } from '@agentuity/runtime';
 import type { AgentContext } from '@agentuity/runtime';
 import { s } from '@agentuity/schema';
-import { generateOutreach } from './generator';
-import { generateLandingPage } from './landing-generator';
-import { processSignalWebhook } from './signal-fetcher';
+import { generateLandingPage } from './generators/landing-page';
+import { generateOutreach } from './generators/outreach';
+import { processSignalWebhook } from './services/linkt';
 import type { EnrichedSignal, LinktWebhookPayload, Signal, StoredSignal } from './types';
 
-// ============================================
-// Schema Definitions
-// ============================================
-
+// Schema definitions
 const SignalSchema = s.object({
 	id: s.string(),
 	type: s.string(),
@@ -32,10 +25,7 @@ const InputSchema = s.object({
 	webhook: s.optional(s.any()),
 });
 
-// ============================================
-// Agent Definition
-// ============================================
-
+// Agent definition
 const KV_NAMESPACE = 'outreach-planner';
 
 const outreachPlanner = createAgent('outreach-planner', {

@@ -1,45 +1,23 @@
-/**
- * Landing Page Generator
- *
- * Uses Agentuity sandbox with OpenCode to generate landing pages.
- *
- * APPROACH: Use sandbox.create() for interactive sandbox execution.
- * OpenCode writes the HTML to a file, we poll for it, then read it back.
- *
- * NOTE: sandbox.run() has a bug where stdout/stderr are not captured
- * (SDK #795 - still open as of 2026-01-31). We use sandbox.create()
- * with file-based output as a workaround.
- */
+/** Generate landing pages with OpenCode in an Agentuity sandbox. */
 
 import type { AgentContext } from '@agentuity/runtime';
-import type { LinktEntity, Signal } from './types';
+import type { LinktEntity, Signal } from '../types';
 
-/** Configuration for the landing page generator */
 const CONFIG = {
-	/** Maximum time to wait for OpenCode to generate the file */
-	MAX_WAIT_MS: 180_000, // 3 minutes
-	/** How often to check for the output file */
-	POLL_INTERVAL_MS: 3_000, // 3 seconds
-	/** Minimum content length to consider valid HTML */
+	MAX_WAIT_MS: 180_000,
+	POLL_INTERVAL_MS: 3_000,
 	MIN_HTML_LENGTH: 100,
-	/** Path where OpenCode writes the output */
 	OUTPUT_PATH: '/home/agentuity/output.html',
-	/** Sandbox resource configuration */
 	RESOURCES: {
 		memory: '2Gi',
 		cpu: '2000m',
 	},
-	/** Sandbox timeout configuration */
 	TIMEOUT: {
 		execution: '5m',
 		idle: '5m',
 	},
 };
 
-/**
- * Generate a landing page for a signal using OpenCode in a sandbox
- * Returns the HTML content, or null if generation fails
- */
 export async function generateLandingPage(
 	ctx: AgentContext<any, any, any>,
 	signal: Signal,
@@ -47,7 +25,6 @@ export async function generateLandingPage(
 ): Promise<string | null> {
 	ctx.logger.info('Starting landing page generation', { signalId: signal.id });
 
-	// Check if sandbox service is available
 	if (!ctx.sandbox?.create) {
 		ctx.logger.error('Sandbox service not available');
 		return null;
@@ -57,7 +34,6 @@ export async function generateLandingPage(
 	let sandbox: Awaited<ReturnType<typeof ctx.sandbox.create>> | null = null;
 
 	try {
-		// Create an interactive sandbox with OpenCode runtime
 		sandbox = await ctx.sandbox.create({
 			runtime: 'opencode:latest',
 			network: { enabled: true },
@@ -67,8 +43,6 @@ export async function generateLandingPage(
 
 		ctx.logger.info('Sandbox created', { sandboxId: sandbox.id });
 
-		// Execute OpenCode to generate the landing page
-		// Note: execute() queues the command and returns immediately
 		const execution = await sandbox.execute({
 			command: ['opencode', 'run', prompt],
 			timeout: CONFIG.TIMEOUT.execution,
@@ -79,7 +53,6 @@ export async function generateLandingPage(
 			status: execution.status,
 		});
 
-		// Poll for the output file
 		const html = await pollForOutputFile(ctx, sandbox);
 
 		if (html) {
@@ -98,7 +71,6 @@ export async function generateLandingPage(
 		});
 		return null;
 	} finally {
-		// Always clean up the sandbox
 		if (sandbox) {
 			try {
 				await sandbox.destroy();
@@ -113,9 +85,6 @@ export async function generateLandingPage(
 	}
 }
 
-/**
- * Poll for the output file and return the HTML content when ready
- */
 async function pollForOutputFile(
 	ctx: AgentContext<any, any, any>,
 	sandbox: Awaited<ReturnType<typeof ctx.sandbox.create>>
@@ -129,25 +98,21 @@ async function pollForOutputFile(
 
 	while (Date.now() - startTime < CONFIG.MAX_WAIT_MS) {
 		try {
-			// Try to read the output file
 			const fileStream = await sandbox.readFile(CONFIG.OUTPUT_PATH);
 			const content = await readStreamToString(fileStream);
 
-			// Check if we have valid HTML content
 			if (content.length >= CONFIG.MIN_HTML_LENGTH && content.includes('<html')) {
 				ctx.logger.info('Output file found', {
 					elapsedMs: Date.now() - startTime,
 					contentLength: content.length,
 				});
 
-				// Extract clean HTML from the content
 				return extractHtmlFromOutput(content);
 			}
 		} catch {
-			// File doesn't exist yet or other error - continue polling
+			// Output not ready yet.
 		}
 
-		// Wait before next poll
 		await sleep(CONFIG.POLL_INTERVAL_MS);
 	}
 
@@ -159,9 +124,6 @@ async function pollForOutputFile(
 	return null;
 }
 
-/**
- * Build the prompt for landing page generation
- */
 function buildLandingPagePrompt(signal: Signal, entities: LinktEntity[]): string {
 	const signalTypeDescriptions: Record<string, string> = {
 		funding: 'funding rounds, investment news, and capital raises',
@@ -291,18 +253,12 @@ function toText(value: unknown): string | undefined {
 	return undefined;
 }
 
-/**
- * Extract clean HTML from OpenCode's output
- * The output may include commentary or other text around the HTML
- */
 function extractHtmlFromOutput(output: string): string | null {
-	// Look for complete HTML document with DOCTYPE
 	const doctypeMatch = output.match(/<!DOCTYPE html>[\s\S]*<\/html>/i);
 	if (doctypeMatch) {
 		return doctypeMatch[0];
 	}
 
-	// Try to find just <html>...</html> and add DOCTYPE
 	const htmlMatch = output.match(/<html[\s\S]*<\/html>/i);
 	if (htmlMatch) {
 		return `<!DOCTYPE html>\n${htmlMatch[0]}`;
@@ -311,9 +267,6 @@ function extractHtmlFromOutput(output: string): string | null {
 	return null;
 }
 
-/**
- * Read a stream to a string
- */
 async function readStreamToString(stream: ReadableStream<Uint8Array>): Promise<string> {
 	const reader = stream.getReader();
 	const chunks: Uint8Array[] = [];
@@ -336,9 +289,6 @@ async function readStreamToString(stream: ReadableStream<Uint8Array>): Promise<s
 	return new TextDecoder().decode(buffer);
 }
 
-/**
- * Sleep for a specified duration
- */
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }

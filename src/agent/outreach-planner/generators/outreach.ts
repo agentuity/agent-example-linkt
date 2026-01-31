@@ -1,15 +1,10 @@
-/**
- * Outreach Generator - LLM-powered content generation
- */
+/** Generate personalized outreach content using GPT-5-mini. */
 
 import OpenAI from 'openai';
-import type { LinktEntity, Outreach, Signal } from './types';
+import type { LinktEntity, Outreach, Signal } from '../types';
 
 const openai = new OpenAI();
 
-/**
- * Generate all outreach content for a signal
- */
 export async function generateOutreach(
 	signal: Signal,
 	entities: LinktEntity[] = []

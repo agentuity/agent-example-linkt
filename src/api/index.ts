@@ -1,11 +1,4 @@
-/**
- * API Routes for Outreach Planner
- *
- * - POST /webhook/linkt - Receive Linkt webhooks
- * - GET /api/signals - List all signals with outreach
- * - GET /api/signals/:id - Get specific signal
- * - POST /api/signals/:id/regenerate - Regenerate outreach for a signal
- */
+/** REST API routes for the outreach planner demo. */
 
 import { createRouter } from '@agentuity/runtime';
 import outreachPlanner from '../agent/outreach-planner';
@@ -15,14 +8,7 @@ const api = createRouter();
 
 const KV_NAMESPACE = 'outreach-planner';
 
-// ============================================
-// Webhook Endpoint
-// ============================================
-
-/**
- * POST /webhook/linkt
- * Receive signal webhooks from Linkt (async)
- */
+// Webhook endpoints
 api.post('/webhook/linkt', async (c) => {
 	const data = await c.req.json();
 	const signalIds = data?.data?.resources?.signals_created ?? [];
@@ -44,10 +30,6 @@ api.post('/webhook/linkt', async (c) => {
 	return c.json({ received: true, processing: true, signalIds });
 });
 
-/**
- * POST /webhook/linkt-sync
- * Receive signal webhooks from Linkt (sync, for testing)
- */
 api.post('/webhook/linkt-sync', async (c) => {
 	const data = await c.req.json();
 	const payload = data?.event_type ? { webhook: data } : data;
@@ -64,14 +46,7 @@ api.post('/webhook/linkt-sync', async (c) => {
 	}
 });
 
-// ============================================
-// Signal CRUD Endpoints
-// ============================================
-
-/**
- * GET /api/signals
- * List all stored signals with their outreach content
- */
+// Signal endpoints
 api.get('/signals', async (c) => {
 	// Get the index of signal IDs
 	const indexResult = await c.var.kv.get<string[]>(KV_NAMESPACE, 'signal:index');
@@ -93,10 +68,6 @@ api.get('/signals', async (c) => {
 	return c.json({ signals, total: signals.length } satisfies SignalListResponse);
 });
 
-/**
- * GET /api/signals/:id
- * Get a specific signal by ID
- */
 api.get('/signals/:id', async (c) => {
 	const id = c.req.param('id');
 
@@ -108,10 +79,6 @@ api.get('/signals/:id', async (c) => {
 	return c.json(result.data);
 });
 
-/**
- * POST /api/signals/:id/regenerate
- * Regenerate outreach for a specific signal
- */
 api.post('/signals/:id/regenerate', async (c) => {
 	const id = c.req.param('id');
 
@@ -126,10 +93,6 @@ api.post('/signals/:id/regenerate', async (c) => {
 	return c.json(agentResult);
 });
 
-/**
- * DELETE /api/signals/:id
- * Delete a signal
- */
 api.delete('/signals/:id', async (c) => {
 	const id = c.req.param('id');
 
@@ -146,14 +109,7 @@ api.delete('/signals/:id', async (c) => {
 	return c.json({ success: true, message: 'Signal deleted' });
 });
 
-// ============================================
-// Landing Page Endpoint
-// ============================================
-
-/**
- * GET /landing/:id
- * Serve the generated landing page HTML for a signal
- */
+// Landing page endpoint
 api.get('/landing/:id', async (c) => {
 	const id = c.req.param('id');
 
@@ -170,10 +126,7 @@ api.get('/landing/:id', async (c) => {
 	return c.html(result.data.landingPageHtml);
 });
 
-// ============================================
-// Health Check
-// ============================================
-
+// Health check
 api.get('/health', (c) => {
 	return c.json({
 		status: 'ok',

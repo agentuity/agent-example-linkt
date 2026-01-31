@@ -1,11 +1,13 @@
-import linkt from './linkt-client';
+/** Linkt SDK client and signal/entity fetch helpers. */
+
+import Linkt from '@linkt/sdk';
 import type {
 	EnrichedSignal,
 	LinktEntity,
 	LinktSignalResponse,
 	LinktWebhookPayload,
 	Signal,
-} from './types';
+} from '../types';
 
 type LoggerLike = {
 	info?: (message: string, meta?: Record<string, unknown>) => void;
@@ -14,6 +16,12 @@ type LoggerLike = {
 };
 
 const DEFAULT_COMPANY_NAME = 'Target Account';
+const environment = process.env['LINKT_ENVIRONMENT'] === 'production' ? 'production' : 'staging';
+
+const linkt = new Linkt({
+	apiKey: process.env['LINKT_API_KEY'],
+	environment,
+});
 
 export async function fetchSignal(
 	signalId: string,

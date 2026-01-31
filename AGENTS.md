@@ -23,10 +23,12 @@ src/
 │   ├── outreach-planner.ts           # Barrel export (SDK workaround)
 │   └── outreach-planner/
 │       ├── agent.ts                  # Main agent handler
-│       ├── generator.ts              # LLM outreach content generation
-│       ├── landing-generator.ts      # OpenCode sandbox landing page generation
-│       ├── linkt-client.ts           # Linkt SDK client singleton
-│       ├── signal-fetcher.ts         # Fetch signals/entities from Linkt API
+│       ├── generators/               # AI content generation
+│       │   ├── outreach.ts           # LLM outreach content generation
+│       │   └── landing-page.ts       # OpenCode sandbox landing page generation
+│       ├── services/                 # External integrations
+│       │   ├── linkt.ts              # Linkt SDK + signal/entity fetching
+│       │   └── index.ts
 │       ├── types.ts                  # TypeScript interfaces
 │       └── index.ts                  # Re-exports
 ├── api/
@@ -67,18 +69,39 @@ Uses **Agentuity Sandbox** with **OpenCode** to generate custom HTML landing pag
 The webhook receives signal IDs from Linkt, then fetches full signal and entity data via the Linkt SDK:
 
 ```
-Linkt Webhook → Signal IDs → Fetch Signals → Fetch Entities → Generate Outreach → Landing Page
+Linkt Webhook → Signal IDs → Fetch Signals → Fetch Entities → Generate Outreach → Generate Landing Page → Store in KV
 ```
 
 **Webhook payload structure (from Linkt):**
 ```json
 {
   "event_type": "run.signal.completed",
+  "timestamp": "2026-01-29T19:49:43.203388+00:00",
   "data": {
     "run_id": "697bb7aee364055d5a96e7e9",
-    "icp_name": "Example: B2B SaaS Companies",
+    "run_name": "signal Run",
+    "icp_name": "Example: B2B SaaS Companies + Sales Leaders",
+    "icp_id": "697adf6304e972a60551bcd4",
+    "user_email": "jack+staging-1@linkt.ai",
+    "user_first_name": "Jack",
+    "started_at": "2026-01-29T19:41:08.830555+00:00",
+    "ended_at": "2026-01-29T19:49:43.200506+00:00",
+    "duration_seconds": 514.369951,
+    "duration_formatted": "8 minutes",
+    "credits_used": 12.3,
+    "error_message": null,
     "resources": {
-      "signals_created": ["signal_id_1", "signal_id_2"]
+      "entities_created": [],
+      "entities_updated": [],
+      "signals_created": [
+        "697bb9bb5082609bb18d609a",
+        "697bb9bb5082609bb18d6099",
+        "697bb9bb5082609bb18d6098"
+      ]
+    },
+    "total_signals": 3,
+    "signal_breakdown": {
+      "other": 3
     }
   }
 }

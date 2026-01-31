@@ -1,13 +1,8 @@
-/**
- * Types for the Outreach Planner Agent
- */
+/** Types for the outreach planner agent. */
 
 import type { Linkt } from '@linkt/sdk';
 
-// ============================================
-// Linkt Webhook Types (from their docs)
-// ============================================
-
+// Linkt webhook types
 export interface LinktWebhookPayload {
 	event_type: string;
 	timestamp: string;
@@ -37,10 +32,7 @@ export interface LinktWebhookData {
 	signal_breakdown?: Record<string, number>;
 }
 
-// ============================================
-// Signal Types (mocked full data for demo)
-// ============================================
-
+// Normalized signal types
 export interface Signal {
 	id: string;
 	type: SignalType;
@@ -65,10 +57,7 @@ export type SignalType =
 	| 'other'
 	| (string & {});
 
-// ============================================
-// Linkt SDK Types
-// ============================================
-
+// Linkt SDK types
 export type LinktSignalResponse = Linkt.SignalResponse;
 export type LinktEntityResponse = Linkt.EntityResponse;
 
@@ -99,10 +88,7 @@ export interface EnrichedSignal {
 	linktSignal?: LinktSignalResponse;
 }
 
-// ============================================
-// Generated Outreach Types
-// ============================================
-
+// Generated outreach types
 export interface Outreach {
 	email: {
 		subject: string;
@@ -114,10 +100,7 @@ export interface Outreach {
 	summary: string;
 }
 
-// ============================================
-// Stored Signal with Outreach
-// ============================================
-
+// Stored signal with outreach
 export interface StoredSignal {
 	signal: Signal;
 	entities?: LinktEntity[];
@@ -129,10 +112,7 @@ export interface StoredSignal {
 	landingPageHtml?: string;
 }
 
-// ============================================
-// API Response Types
-// ============================================
-
+// API response types
 export interface SignalListResponse {
 	signals: StoredSignal[];
 	total: number;
