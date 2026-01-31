@@ -2,6 +2,8 @@
  * Types for the Outreach Planner Agent
  */
 
+import type { Linkt } from '@linkt/sdk';
+
 // ============================================
 // Linkt Webhook Types (from their docs)
 // ============================================
@@ -59,7 +61,43 @@ export type SignalType =
 	| 'expansion'
 	| 'hiring_surge'
 	| 'layoff'
-	| 'award';
+	| 'award'
+	| 'other'
+	| (string & {});
+
+// ============================================
+// Linkt SDK Types
+// ============================================
+
+export type LinktSignalResponse = Linkt.SignalResponse;
+export type LinktEntityResponse = Linkt.EntityResponse;
+
+export interface LinktEntityData {
+	name?: string;
+	email?: string;
+	title?: string;
+	linkedin_url?: string;
+	company_name?: string;
+	company_domain?: string;
+	industry?: string;
+	location?: string;
+	headquarters?: string;
+	size?: string;
+	employees?: string | number;
+	revenue?: string;
+	website?: string;
+	description?: string;
+}
+
+export type LinktEntity = LinktEntityResponse & {
+	data: LinktEntityData & Record<string, unknown>;
+};
+
+export interface EnrichedSignal {
+	signal: Signal;
+	entities: LinktEntity[];
+	linktSignal?: LinktSignalResponse;
+}
 
 // ============================================
 // Generated Outreach Types
@@ -82,6 +120,8 @@ export interface Outreach {
 
 export interface StoredSignal {
 	signal: Signal;
+	entities?: LinktEntity[];
+	linktSignal?: LinktSignalResponse;
 	outreach: Outreach;
 	generatedAt: string;
 	status: 'pending' | 'generated' | 'error';

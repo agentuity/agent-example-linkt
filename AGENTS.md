@@ -25,6 +25,8 @@ src/
 │       ├── agent.ts                  # Main agent handler
 │       ├── generator.ts              # LLM outreach content generation
 │       ├── landing-generator.ts      # OpenCode sandbox landing page generation
+│       ├── linkt-client.ts           # Linkt SDK client singleton
+│       ├── signal-fetcher.ts         # Fetch signals/entities from Linkt API
 │       ├── types.ts                  # TypeScript interfaces
 │       └── index.ts                  # Re-exports
 ├── api/
@@ -60,16 +62,71 @@ Uses **Agentuity Sandbox** with **OpenCode** to generate custom HTML landing pag
 
 ## Key Patterns
 
-### Webhook Processing
+### Webhook Processing Flow
 
-The webhook endpoint processes signals synchronously:
+The webhook receives signal IDs from Linkt, then fetches full signal and entity data via the Linkt SDK:
 
+```
+Linkt Webhook → Signal IDs → Fetch Signals → Fetch Entities → Generate Outreach → Landing Page
+```
+
+**Webhook payload structure (from Linkt):**
+```json
+{
+  "event_type": "run.signal.completed",
+  "data": {
+    "run_id": "697bb7aee364055d5a96e7e9",
+    "icp_name": "Example: B2B SaaS Companies",
+    "resources": {
+      "signals_created": ["signal_id_1", "signal_id_2"]
+    }
+  }
+}
+```
+
+**Async webhook handler** (returns immediately, processes in background):
 ```typescript
 api.post('/webhook/linkt', async (c) => {
+  const data = await c.req.json();
+  const signalIds = data?.data?.resources?.signals_created ?? [];
+
+  // Return immediately, process in background
+  c.waitUntil(async () => {
+    await outreachPlanner.run({ webhook: data });
+  });
+
+  return c.json({ received: true, processing: true, signalIds });
+});
+```
+
+**Sync webhook handler** (for testing):
+```typescript
+api.post('/webhook/linkt-sync', async (c) => {
   const data = await c.req.json();
   const result = await outreachPlanner.run(data);
   return c.json({ received: true, result });
 });
+```
+
+### Linkt SDK Integration
+
+Uses `@linkt/sdk` to fetch signals and entities:
+
+```typescript
+import Linkt from '@linkt/sdk';
+
+const linkt = new Linkt({
+  apiKey: process.env['LINKT_API_KEY'],
+  environment: 'staging', // or 'production'
+});
+
+// Fetch signal details
+const signal = await linkt.signal.retrieve(signalId);
+// Returns: { id, entity_ids, summary, signal_type, strength, ... }
+
+// Fetch entity (company or person)
+const entity = await linkt.entity.retrieve(entityId);
+// Returns: { id, entity_type, data: { name, email, company_name, ... } }
 ```
 
 ### KV Storage
@@ -156,10 +213,10 @@ createAgent('name', {
 
 ## Testing
 
-Send a test webhook:
+### Option 1: Test with inline signal data (sync endpoint)
 
 ```bash
-curl -X POST http://localhost:3500/api/webhook/linkt \
+curl -X POST http://localhost:3500/api/webhook/linkt-sync \
   -H "Content-Type: application/json" \
   -d '{
     "signal": {
@@ -173,12 +230,32 @@ curl -X POST http://localhost:3500/api/webhook/linkt \
   }'
 ```
 
-Check signals:
+### Option 2: Test with real Linkt webhook format (requires LINKT_API_KEY)
+
+```bash
+curl -X POST http://localhost:3500/api/webhook/linkt \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_type": "run.signal.completed",
+    "timestamp": "2026-01-29T19:49:43.203388+00:00",
+    "data": {
+      "run_id": "697bb7aee364055d5a96e7e9",
+      "run_name": "signal Run",
+      "icp_name": "Example: B2B SaaS Companies",
+      "icp_id": "697adf6304e972a60551bcd4",
+      "resources": {
+        "signals_created": ["697bb9bb5082609bb18d609a"]
+      }
+    }
+  }'
+```
+
+### Check signals:
 ```bash
 curl http://localhost:3500/api/signals
 ```
 
-View landing page:
+### View landing page:
 ```bash
 curl http://localhost:3500/api/landing/sig_test
 ```
@@ -195,6 +272,7 @@ curl http://localhost:3500/api/landing/sig_test
 - `@agentuity/runtime` - Agentuity agent runtime
 - `@opencode-ai/sdk` - OpenCode SDK (installed but not directly used yet)
 - `openai` - OpenAI API client
+- `@linkt/sdk` - Linkt API client for fetching signals and entities
 
 ## References
 

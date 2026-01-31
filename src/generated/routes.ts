@@ -73,6 +73,12 @@ declare module '@agentuity/frontend' {
 				stream: false;
 				params: never;
 			};
+	'POST /api/webhook/linkt-sync': {
+				inputSchema: never;
+				outputSchema: never;
+				stream: false;
+				params: never;
+			};
 	}
 	
 	/**
@@ -143,6 +149,12 @@ declare module '@agentuity/frontend' {
 				 */
 				post: { input: never; output: never; type: 'api'; params: never; paramsTuple: [] };
 			};
+			linktSync: {
+				/**
+				 * Route: POST /api/webhook/linkt-sync
+				 */
+				post: { input: never; output: never; type: 'api'; params: never; paramsTuple: [] };
+			};
 		};
 	}
 }
@@ -188,6 +200,12 @@ declare module '@agentuity/react' {
 				params: { id: string };
 			};
 	'POST /api/webhook/linkt': {
+				inputSchema: never;
+				outputSchema: never;
+				stream: false;
+				params: never;
+			};
+	'POST /api/webhook/linkt-sync': {
 				inputSchema: never;
 				outputSchema: never;
 				stream: false;
@@ -241,6 +259,12 @@ declare module '@agentuity/react' {
 			linkt: {
 				/**
 				 * Route: POST /api/webhook/linkt
+				 */
+				post: { input: never; output: never; type: 'api'; params: never; paramsTuple: [] };
+			};
+			linktSync: {
+				/**
+				 * Route: POST /api/webhook/linkt-sync
 				 */
 				post: { input: never; output: never; type: 'api'; params: never; paramsTuple: [] };
 			};
@@ -307,6 +331,12 @@ const _rpcRouteMetadata = {
 						"post": {
 								"type": "api",
 								"path": "/api/webhook/linkt"
+						}
+				},
+				"linktSync": {
+						"post": {
+								"type": "api",
+								"path": "/api/webhook/linkt-sync"
 						}
 				}
 		}

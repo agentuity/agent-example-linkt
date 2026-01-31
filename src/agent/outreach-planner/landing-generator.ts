@@ -12,7 +12,7 @@
  */
 
 import type { AgentContext } from '@agentuity/runtime';
-import type { Signal } from './types';
+import type { LinktEntity, Signal } from './types';
 
 /** Configuration for the landing page generator */
 const CONFIG = {
@@ -42,7 +42,8 @@ const CONFIG = {
  */
 export async function generateLandingPage(
 	ctx: AgentContext<any, any, any>,
-	signal: Signal
+	signal: Signal,
+	entities: LinktEntity[] = []
 ): Promise<string | null> {
 	ctx.logger.info('Starting landing page generation', { signalId: signal.id });
 
@@ -52,7 +53,7 @@ export async function generateLandingPage(
 		return null;
 	}
 
-	const prompt = buildLandingPagePrompt(signal);
+	const prompt = buildLandingPagePrompt(signal, entities);
 	let sandbox: Awaited<ReturnType<typeof ctx.sandbox.create>> | null = null;
 
 	try {
@@ -161,7 +162,7 @@ async function pollForOutputFile(
 /**
  * Build the prompt for landing page generation
  */
-function buildLandingPagePrompt(signal: Signal): string {
+function buildLandingPagePrompt(signal: Signal, entities: LinktEntity[]): string {
 	const signalTypeDescriptions: Record<string, string> = {
 		funding: 'funding rounds, investment news, and capital raises',
 		leadership_change: 'executive moves, leadership transitions, and C-suite changes',
@@ -175,6 +176,8 @@ function buildLandingPagePrompt(signal: Signal): string {
 	};
 
 	const signalCategory = signalTypeDescriptions[signal.type] || signal.type.replace(/_/g, ' ');
+	const entityContext = buildEntityContext(entities);
+	const ctaGuidance = buildCtaGuidance(entities);
 
 	return `Write a complete HTML landing page to ${CONFIG.OUTPUT_PATH} for this business signal.
 
@@ -188,6 +191,8 @@ IMPORTANT: Use the Write tool to create the file at ${CONFIG.OUTPUT_PATH}
 - Summary: ${signal.summary}
 ${signal.source ? `- Source: ${signal.source}` : ''}
 
+${entityContext}
+
 ## Requirements
 
 Create a single-file HTML landing page that:
@@ -199,18 +204,91 @@ Create a single-file HTML landing page that:
    - Responsive layout
    - All CSS in a <style> tag
 3. Structure:
-   - Hero section with compelling headline about ${signal.company}
-   - Key highlights section summarizing the signal
-   - Context section (why this matters)
-   - Call-to-action
-   - Footer with timestamp
+	- Hero section with compelling headline about ${signal.company}
+	- Key highlights section summarizing the signal
+	- Context section (why this matters)
+	- Call-to-action with targeted messaging
+	- Footer with timestamp
 4. Technical:
    - Single HTML file, all CSS inline in a <style> tag
    - No external dependencies or CDN links
    - Semantic HTML5
    - Mobile-responsive
 
-Write the complete HTML file now to ${CONFIG.OUTPUT_PATH}`;
+ CTA Guidance:
+ ${ctaGuidance}
+
+ Write the complete HTML file now to ${CONFIG.OUTPUT_PATH}`;
+}
+
+function buildEntityContext(entities: LinktEntity[]): string {
+	if (!entities.length) {
+		return '## Entity Context\nNo entity data available.';
+	}
+
+	const company = findCompanyEntity(entities);
+	const contact = findPersonEntity(entities);
+
+	const companyName = toText(company?.data?.name) ?? toText(company?.data?.company_name);
+	const companyIndustry = toText(company?.data?.industry);
+	const companyLocation = toText(company?.data?.location) ?? toText(company?.data?.headquarters);
+	const companySize = toText(company?.data?.size) ?? toText(company?.data?.employees);
+	const companyWebsite = toText(company?.data?.website) ?? toText(company?.data?.company_domain);
+
+	const contactName = toText(contact?.data?.name);
+	const contactTitle = toText(contact?.data?.title);
+	const contactLinkedIn = toText(contact?.data?.linkedin_url);
+
+	return `## Entity Context
+- Company Name: ${companyName ?? 'Unknown'}
+- Company Industry: ${companyIndustry ?? 'Unknown'}
+- Company Size: ${companySize ?? 'Unknown'}
+- Company Location: ${companyLocation ?? 'Unknown'}
+- Company Website: ${companyWebsite ?? 'Unknown'}
+- Primary Contact: ${contactName ?? 'Unknown'}
+- Contact Title: ${contactTitle ?? 'Unknown'}
+- Contact LinkedIn: ${contactLinkedIn ?? 'Unknown'}`;
+}
+
+function buildCtaGuidance(entities: LinktEntity[]): string {
+	const contact = findPersonEntity(entities);
+	const company = findCompanyEntity(entities);
+	const contactName = toText(contact?.data?.name);
+	const companyName =
+		toText(company?.data?.name) ?? toText(company?.data?.company_name) ?? toText(contact?.data?.company_name);
+
+	if (contact) {
+		return `Focus the CTA on a direct outreach to ${contactName ?? 'the contact'} at ${companyName ?? 'their company'}, such as booking a 15-minute strategy call or requesting a tailored plan.`;
+	}
+
+	if (company) {
+		return `Focus the CTA on ${companyName ?? 'the company'} with a clear next step (request a tailored assessment, benchmark report, or strategy session).`;
+	}
+
+	return 'Use a general B2B CTA to request a tailored plan or short consultation.';
+}
+
+function findCompanyEntity(entities: LinktEntity[]): LinktEntity | undefined {
+	return entities.find(
+		(entity) =>
+			entity.entity_type === 'company' || typeof entity.data?.company_name === 'string'
+	);
+}
+
+function findPersonEntity(entities: LinktEntity[]): LinktEntity | undefined {
+	return entities.find((entity) => entity.entity_type === 'person' || typeof entity.data?.email === 'string');
+}
+
+function toText(value: unknown): string | undefined {
+	if (typeof value === 'string') {
+		return value.trim();
+	}
+
+	if (typeof value === 'number') {
+		return String(value);
+	}
+
+	return undefined;
 }
 
 /**

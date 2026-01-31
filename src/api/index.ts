@@ -21,19 +21,45 @@ const KV_NAMESPACE = 'outreach-planner';
 
 /**
  * POST /webhook/linkt
- * Receive signal webhooks from Linkt
+ * Receive signal webhooks from Linkt (async)
  */
 api.post('/webhook/linkt', async (c) => {
 	const data = await c.req.json();
+	const signalIds = data?.data?.resources?.signals_created ?? [];
 
-	c.var.logger.info('Received Linkt webhook', { hasSignal: !!data?.signal });
+	c.var.logger.info('Received Linkt webhook', {
+		hasSignal: !!data?.signal,
+		signalCount: signalIds.length,
+	});
+
+	c.waitUntil(async () => {
+		try {
+			await outreachPlanner.run({ webhook: data });
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			c.var.logger.error('Webhook processing failed', { error: errorMessage });
+		}
+	});
+
+	return c.json({ received: true, processing: true, signalIds });
+});
+
+/**
+ * POST /webhook/linkt-sync
+ * Receive signal webhooks from Linkt (sync, for testing)
+ */
+api.post('/webhook/linkt-sync', async (c) => {
+	const data = await c.req.json();
+	const payload = data?.event_type ? { webhook: data } : data;
+
+	c.var.logger.info('Received Linkt sync webhook', { hasSignal: !!data?.signal });
 
 	try {
-		const result = await outreachPlanner.run(data);
+		const result = await outreachPlanner.run(payload);
 		return c.json({ received: true, result });
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
-		c.var.logger.error('Webhook processing failed', { error: errorMessage });
+		c.var.logger.error('Webhook sync processing failed', { error: errorMessage });
 		return c.json({ received: false, error: errorMessage }, 500);
 	}
 });

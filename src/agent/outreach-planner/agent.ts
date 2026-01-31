@@ -5,10 +5,12 @@
  */
 
 import { createAgent } from '@agentuity/runtime';
+import type { AgentContext } from '@agentuity/runtime';
 import { s } from '@agentuity/schema';
 import { generateOutreach } from './generator';
 import { generateLandingPage } from './landing-generator';
-import type { Signal, StoredSignal, LinktWebhookPayload } from './types';
+import { processSignalWebhook } from './signal-fetcher';
+import type { EnrichedSignal, LinktWebhookPayload, Signal, StoredSignal } from './types';
 
 // ============================================
 // Schema Definitions
@@ -48,11 +50,16 @@ const outreachPlanner = createAgent('outreach-planner', {
 	},
 
 	handler: async (ctx, input) => {
-		// Extract signal from input
-		let signal: Signal | null = null;
+		let enrichedSignals: EnrichedSignal[] = [];
 
 		if (input.signal) {
-			signal = input.signal as Signal;
+			enrichedSignals = [
+				{
+					signal: input.signal as Signal,
+					entities: [],
+					linktSignal: undefined,
+				},
+			];
 		} else if (input.webhook) {
 			const payload = input.webhook as LinktWebhookPayload;
 			ctx.logger.info('Processing Linkt webhook', {
@@ -60,95 +67,121 @@ const outreachPlanner = createAgent('outreach-planner', {
 				run_id: payload.data?.run_id,
 			});
 
-			// For demo: webhook should include full signal data
-			if (payload.data?.resources?.signals_created?.length) {
-				return {
-					success: false,
-					message: 'Webhook contains signal IDs only. For demo, send full signal data.',
-				};
-			}
+			enrichedSignals = await processSignalWebhook(payload, ctx.logger);
 		}
 
-		if (!signal) {
+		if (!enrichedSignals.length) {
 			return {
 				success: false,
-				message: 'No signal data provided',
+				message: 'No signal data provided or retrieved',
 			};
 		}
 
-		ctx.logger.info('Processing signal', {
-			id: signal.id,
-			type: signal.type,
-			company: signal.company,
-		});
+		const results = await Promise.all(
+			enrichedSignals.map((enrichedSignal) => processEnrichedSignal(ctx, enrichedSignal))
+		);
 
-		try {
-			// Generate outreach AND landing page in parallel
-			const [outreach, landingPageResult] = await Promise.all([
-				generateOutreach(signal),
-				generateLandingPage(ctx, signal).catch((err) => {
-					ctx.logger.warn('Landing page generation failed, continuing without it', {
-						error: String(err),
-					});
-					return null;
-				}),
-			]);
+		const successful = results.filter((result) => result.success);
+		const failed = results.filter((result) => !result.success);
+		const firstSignalId = successful[0]?.signalId ?? results[0]?.signalId;
+		const message = successful.length
+			? `Generated outreach for ${successful.length} signal(s)`
+			: `Failed to generate outreach for ${failed.length} signal(s)`;
 
-			// Store signal with outreach (and landing page HTML if available)
-			const storedSignal: StoredSignal = {
-				signal,
-				outreach,
-				landingPageHtml: landingPageResult ?? undefined,
-				generatedAt: new Date().toISOString(),
-				status: 'generated',
-			};
-
-			await ctx.kv.set(KV_NAMESPACE, `signal:${signal.id}`, storedSignal);
-
-			// Maintain index of signal IDs
-			const indexResult = await ctx.kv.get<string[]>(KV_NAMESPACE, 'signal:index');
-			const signalIds: string[] = indexResult.exists ? indexResult.data : [];
-
-			if (!signalIds.includes(signal.id)) {
-				signalIds.unshift(signal.id);
-				await ctx.kv.set(KV_NAMESPACE, 'signal:index', signalIds);
-			}
-
-			ctx.logger.info('Signal processed', { signalId: signal.id });
-
-			return {
-				success: true,
-				signalId: signal.id,
-				message: `Outreach generated for ${signal.company} (${signal.type})`,
-			};
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			ctx.logger.error('Failed to process signal', { error: errorMessage });
-
-			// Store error state
-			const storedSignal: StoredSignal = {
-				signal,
-				outreach: {
-					email: { subject: '', body: '' },
-					linkedin: '',
-					twitter: '',
-					callPoints: [],
-					summary: '',
-				},
-				generatedAt: new Date().toISOString(),
-				status: 'error',
-				error: errorMessage,
-			};
-
-			await ctx.kv.set(KV_NAMESPACE, `signal:${signal.id}`, storedSignal);
-
-			return {
-				success: false,
-				signalId: signal.id,
-				message: `Failed to generate outreach: ${errorMessage}`,
-			};
-		}
+		return {
+			success: successful.length > 0,
+			signalId: firstSignalId,
+			message,
+		};
 	},
 });
+
+async function processEnrichedSignal(
+	ctx: AgentContext<any, any, any>,
+	enrichedSignal: EnrichedSignal
+): Promise<{ success: boolean; signalId: string; message: string }> {
+	const { signal, entities, linktSignal } = enrichedSignal;
+
+	ctx.logger.info('Processing signal', {
+		id: signal.id,
+		type: signal.type,
+		company: signal.company,
+		entities: entities.length,
+	});
+
+	try {
+		const [outreach, landingPageResult] = await Promise.all([
+			generateOutreach(signal, entities),
+			generateLandingPage(ctx, signal, entities).catch((err) => {
+				ctx.logger.warn('Landing page generation failed, continuing without it', {
+					error: String(err),
+				});
+				return null;
+			}),
+		]);
+
+		const storedSignal: StoredSignal = {
+			signal,
+			entities,
+			linktSignal,
+			outreach,
+			landingPageHtml: landingPageResult ?? undefined,
+			generatedAt: new Date().toISOString(),
+			status: 'generated',
+		};
+
+		await ctx.kv.set(KV_NAMESPACE, `signal:${signal.id}`, storedSignal);
+		await updateSignalIndex(ctx, signal.id);
+
+		ctx.logger.info('Signal processed', { signalId: signal.id });
+
+		return {
+			success: true,
+			signalId: signal.id,
+			message: `Outreach generated for ${signal.company} (${signal.type})`,
+		};
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		ctx.logger.error('Failed to process signal', { error: errorMessage });
+
+		const storedSignal: StoredSignal = {
+			signal,
+			entities,
+			linktSignal,
+			outreach: {
+				email: { subject: '', body: '' },
+				linkedin: '',
+				twitter: '',
+				callPoints: [],
+				summary: '',
+			},
+			generatedAt: new Date().toISOString(),
+			status: 'error',
+			error: errorMessage,
+		};
+
+		await ctx.kv.set(KV_NAMESPACE, `signal:${signal.id}`, storedSignal);
+		await updateSignalIndex(ctx, signal.id);
+
+		return {
+			success: false,
+			signalId: signal.id,
+			message: `Failed to generate outreach: ${errorMessage}`,
+		};
+	}
+}
+
+async function updateSignalIndex(
+	ctx: AgentContext<any, any, any>,
+	signalId: string
+): Promise<void> {
+	const indexResult = await ctx.kv.get<string[]>(KV_NAMESPACE, 'signal:index');
+	const signalIds: string[] = indexResult.exists ? indexResult.data : [];
+
+	if (!signalIds.includes(signalId)) {
+		signalIds.unshift(signalId);
+		await ctx.kv.set(KV_NAMESPACE, 'signal:index', signalIds);
+	}
+}
 
 export default outreachPlanner;
