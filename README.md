@@ -2,6 +2,10 @@
 
 An AI-powered outreach content generator that receives business signals from [Linkt](https://linkt.ai) and automatically creates personalized sales and marketing content.
 
+<img width="1573" height="973" alt="image" src="https://github.com/user-attachments/assets/f38c8daa-b7d9-4422-8e0a-b0e69f7f8b0b" />
+<img width="1448" height="1850" alt="image" src="https://github.com/user-attachments/assets/e4bc9f6e-8681-41bf-931c-92284ec1e8da" />
+
+
 ## How It Works
 
 ```
