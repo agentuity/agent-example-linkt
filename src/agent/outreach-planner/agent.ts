@@ -7,6 +7,7 @@
 import { createAgent } from '@agentuity/runtime';
 import { s } from '@agentuity/schema';
 import { generateOutreach } from './generator';
+import { generateLandingPage } from './landing-generator';
 import type { Signal, StoredSignal, LinktWebhookPayload } from './types';
 
 // ============================================
@@ -82,13 +83,22 @@ const outreachPlanner = createAgent('outreach-planner', {
 		});
 
 		try {
-			// Generate outreach content
-			const outreach = await generateOutreach(signal);
+			// Generate outreach AND landing page in parallel
+			const [outreach, landingPageResult] = await Promise.all([
+				generateOutreach(signal),
+				generateLandingPage(ctx, signal).catch((err) => {
+					ctx.logger.warn('Landing page generation failed, continuing without it', {
+						error: String(err),
+					});
+					return null;
+				}),
+			]);
 
-			// Store signal with outreach
+			// Store signal with outreach (and landing page HTML if available)
 			const storedSignal: StoredSignal = {
 				signal,
 				outreach,
+				landingPageHtml: landingPageResult ?? undefined,
 				generatedAt: new Date().toISOString(),
 				status: 'generated',
 			};

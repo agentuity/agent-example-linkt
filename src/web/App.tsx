@@ -26,6 +26,7 @@ interface StoredSignal {
 	generatedAt: string;
 	status: 'pending' | 'generated' | 'error';
 	error?: string;
+	landingPageHtml?: string;
 }
 
 interface SignalListResponse {
@@ -186,7 +187,7 @@ function SignalCard({ stored, isExpanded, onToggle }: {
 								</h4>
 								<ul className="bg-gray-900 rounded p-3 border border-gray-800 space-y-1">
 									{outreach.callPoints.map((point, i) => (
-										<li key={i} className="text-white text-sm flex items-start gap-2">
+										<li key={`point-${i}`} className="text-white text-sm flex items-start gap-2">
 											<span className="text-cyan-400">-</span>
 											{point}
 										</li>
@@ -194,9 +195,50 @@ function SignalCard({ stored, isExpanded, onToggle }: {
 								</ul>
 							</div>
 
+							{/* Landing Page */}
+							{stored.landingPageHtml && (
+								<div>
+									<h4 className="text-sm text-gray-400 mb-2 flex items-center justify-between">
+										Landing Page
+										<CopyButton text={`${window.location.origin}/api/landing/${signal.id}`} label="Copy URL" />
+									</h4>
+									<div className="bg-gradient-to-r from-cyan-900/30 to-purple-900/30 rounded p-4 border border-cyan-800/50">
+										<div className="flex items-center justify-between">
+											<div className="flex items-center gap-3">
+												<div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+													<svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<title>Globe icon</title>
+														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+													</svg>
+												</div>
+												<div>
+													<p className="text-white text-sm font-medium">AI-Generated Landing Page</p>
+													<p className="text-gray-400 text-xs">Powered by Agentuity Sandbox + GPT</p>
+												</div>
+											</div>
+											<a
+												href={`/api/landing/${signal.id}`}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+											>
+												View Page
+												<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<title>External link icon</title>
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+												</svg>
+											</a>
+										</div>
+									</div>
+								</div>
+							)}
+
 							{/* Metadata */}
-							<div className="text-xs text-gray-500 pt-2 border-t border-gray-800">
-								Generated: {new Date(generatedAt).toLocaleString()}
+							<div className="text-xs text-gray-500 pt-2 border-t border-gray-800 flex items-center justify-between">
+								<span>Generated: {new Date(generatedAt).toLocaleString()}</span>
+								{stored.landingPageHtml && (
+									<span className="text-cyan-400/60">Landing page available</span>
+								)}
 							</div>
 						</>
 					)}

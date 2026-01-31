@@ -37,6 +37,12 @@ declare module '@agentuity/frontend' {
 				stream: false;
 				params: never;
 			};
+	'GET /api/landing/:id': {
+				inputSchema: never;
+				outputSchema: never;
+				stream: false;
+				params: { id: string };
+			};
 	'GET /api/signals': {
 				inputSchema: never;
 				outputSchema: never;
@@ -100,6 +106,14 @@ declare module '@agentuity/frontend' {
 			 */
 			get: { input: never; output: never; type: 'api'; params: never; paramsTuple: [] };
 		};
+		landing: {
+			id: {
+				/**
+				 * Route: GET /api/landing/:id
+				 */
+				get: { input: never; output: never; type: 'api'; params: { id: string }; paramsTuple: [string] };
+			};
+		};
 		signals: {
 			/**
 			 * Route: GET /api/signals
@@ -142,6 +156,12 @@ declare module '@agentuity/react' {
 				outputSchema: never;
 				stream: false;
 				params: never;
+			};
+	'GET /api/landing/:id': {
+				inputSchema: never;
+				outputSchema: never;
+				stream: false;
+				params: { id: string };
 			};
 	'GET /api/signals': {
 				inputSchema: never;
@@ -187,6 +207,14 @@ declare module '@agentuity/react' {
 			 */
 			get: { input: never; output: never; type: 'api'; params: never; paramsTuple: [] };
 		};
+		landing: {
+			id: {
+				/**
+				 * Route: GET /api/landing/:id
+				 */
+				get: { input: never; output: never; type: 'api'; params: { id: string }; paramsTuple: [string] };
+			};
+		};
 		signals: {
 			/**
 			 * Route: GET /api/signals
@@ -230,6 +258,17 @@ const _rpcRouteMetadata = {
 				"get": {
 						"type": "api",
 						"path": "/api/health"
+				}
+		},
+		"landing": {
+				"id": {
+						"get": {
+								"type": "api",
+								"path": "/api/landing/:id",
+								"pathParams": [
+										"id"
+								]
+						}
 				}
 		},
 		"signals": {

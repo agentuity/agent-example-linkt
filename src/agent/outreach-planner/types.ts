@@ -86,6 +86,7 @@ export interface StoredSignal {
 	generatedAt: string;
 	status: 'pending' | 'generated' | 'error';
 	error?: string;
+	landingPageHtml?: string;
 }
 
 // ============================================

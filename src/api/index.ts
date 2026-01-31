@@ -22,24 +22,20 @@ const KV_NAMESPACE = 'outreach-planner';
 /**
  * POST /webhook/linkt
  * Receive signal webhooks from Linkt
- * Returns 200 immediately and processes in background
  */
 api.post('/webhook/linkt', async (c) => {
 	const data = await c.req.json();
 
 	c.var.logger.info('Received Linkt webhook', { hasSignal: !!data?.signal });
 
-	// Process in background, respond immediately
-	c.waitUntil(async () => {
-		try {
-			await outreachPlanner.run(data);
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			c.var.logger.error('Webhook processing failed', { error: errorMessage });
-		}
-	});
-
-	return c.json({ received: true });
+	try {
+		const result = await outreachPlanner.run(data);
+		return c.json({ received: true, result });
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		c.var.logger.error('Webhook processing failed', { error: errorMessage });
+		return c.json({ received: false, error: errorMessage }, 500);
+	}
 });
 
 // ============================================
@@ -122,6 +118,30 @@ api.delete('/signals/:id', async (c) => {
 	await c.var.kv.delete(KV_NAMESPACE, `signal:${id}`);
 
 	return c.json({ success: true, message: 'Signal deleted' });
+});
+
+// ============================================
+// Landing Page Endpoint
+// ============================================
+
+/**
+ * GET /landing/:id
+ * Serve the generated landing page HTML for a signal
+ */
+api.get('/landing/:id', async (c) => {
+	const id = c.req.param('id');
+
+	const result = await c.var.kv.get<StoredSignal>(KV_NAMESPACE, `signal:${id}`);
+	if (!result.exists) {
+		return c.json({ error: 'Signal not found' }, 404);
+	}
+
+	if (!result.data.landingPageHtml) {
+		return c.json({ error: 'Landing page not available for this signal' }, 404);
+	}
+
+	// Return the HTML with proper content type
+	return c.html(result.data.landingPageHtml);
 });
 
 // ============================================

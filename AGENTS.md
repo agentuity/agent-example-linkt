@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is an **Agentuity agent** that integrates with [Linkt](https://linkt.ai) to generate AI-powered sales/marketing outreach content from business signals.
+This is an **Agentuity agent** that integrates with [Linkt](https://linkt.ai) to generate AI-powered sales/marketing outreach content and landing pages from business signals.
 
 **Architecture**: Webhook-driven (Linkt pushes signals to us)
 
@@ -23,7 +23,8 @@ src/
 │   ├── outreach-planner.ts           # Barrel export (SDK workaround)
 │   └── outreach-planner/
 │       ├── agent.ts                  # Main agent handler
-│       ├── generator.ts              # LLM content generation
+│       ├── generator.ts              # LLM outreach content generation
+│       ├── landing-generator.ts      # OpenCode sandbox landing page generation
 │       ├── types.ts                  # TypeScript interfaces
 │       └── index.ts                  # Re-exports
 ├── api/
@@ -34,22 +35,40 @@ src/
     └── frontend.tsx                  # React entry point
 ```
 
+## Key Features
+
+### 1. Outreach Content Generation
+
+Uses OpenAI's `gpt-5-mini` model to generate:
+- Email subject/body
+- LinkedIn post
+- Twitter post
+- Sales call talking points
+- Signal summary
+
+### 2. Landing Page Generation
+
+Uses **Agentuity Sandbox** with **OpenCode** to generate custom HTML landing pages for each signal.
+
+**How it works:**
+1. Creates an interactive sandbox with `opencode:latest` runtime
+2. Executes OpenCode with a prompt to generate an HTML landing page
+3. Polls for the output file to be created
+4. Reads the HTML content and stores it with the signal
+
+**Endpoint**: `GET /api/landing/:id` serves the generated HTML
+
 ## Key Patterns
 
 ### Webhook Processing
 
-The webhook endpoint uses `waitUntil` for background processing:
+The webhook endpoint processes signals synchronously:
 
 ```typescript
 api.post('/webhook/linkt', async (c) => {
   const data = await c.req.json();
-  
-  // Process in background, respond immediately
-  c.waitUntil(async () => {
-    await outreachPlanner.run(data);
-  });
-  
-  return c.json({ received: true });
+  const result = await outreachPlanner.run(data);
+  return c.json({ received: true, result });
 });
 ```
 
@@ -57,7 +76,7 @@ api.post('/webhook/linkt', async (c) => {
 
 Signals are stored in the `outreach-planner` KV namespace:
 - `signal:index` - Array of signal IDs
-- `signal:{id}` - Individual signal with outreach content
+- `signal:{id}` - Individual signal with outreach content and landing page HTML
 
 Access in agents:
 ```typescript
@@ -65,11 +84,32 @@ await ctx.kv.set(namespace, key, value);
 const result = await ctx.kv.get<Type>(namespace, key);
 ```
 
-Access in routes:
+### Sandbox Usage (Landing Page Generation)
+
+Uses `ctx.sandbox.create()` for interactive sandbox execution:
+
 ```typescript
-await c.var.kv.set(namespace, key, value);
-const result = await c.var.kv.get<Type>(namespace, key);
+const sandbox = await ctx.sandbox.create({
+  runtime: 'opencode:latest',
+  network: { enabled: true },
+  resources: { memory: '2Gi', cpu: '2000m' },
+  timeout: { execution: '5m', idle: '5m' },
+});
+
+// Execute command (queues and returns immediately)
+await sandbox.execute({
+  command: ['opencode', 'run', prompt],
+  timeout: '5m',
+});
+
+// Poll for output file
+const fileStream = await sandbox.readFile('/home/agentuity/output.html');
+
+// Cleanup
+await sandbox.destroy();
 ```
+
+**Note**: `sandbox.run()` has a bug where stdout/stderr are not captured (SDK #795). Use `sandbox.create()` with file-based output as a workaround.
 
 ### LLM Generation
 
@@ -85,11 +125,15 @@ const response = await openai.chat.completions.create({
 
 **Note**: `gpt-5-mini` does not support the `temperature` parameter.
 
-## Known Workarounds
+## Known Issues & Workarounds
+
+### SDK #795: sandbox.run() stdout bug
+
+`sandbox.run()` returns empty stdout/stderr even on successful execution. **Workaround**: Use `sandbox.create()` + `sandbox.execute()` + polling + `sandbox.readFile()`.
 
 ### Route Generator Bug
 
-The route generator imports `../agent/outreach-planner.js` but the agent is in a subfolder. Workaround: `src/agent/outreach-planner.ts` is a barrel file that re-exports from `./outreach-planner/agent`.
+The route generator imports `../agent/outreach-planner.js` but the agent is in a subfolder. **Workaround**: `src/agent/outreach-planner.ts` is a barrel file that re-exports from `./outreach-planner/agent`.
 
 ### Output Schema Bug
 
@@ -134,13 +178,26 @@ Check signals:
 curl http://localhost:3500/api/signals
 ```
 
+View landing page:
+```bash
+curl http://localhost:3500/api/landing/sig_test
+```
+
 ## Environment
 
 - **Runtime**: Bun
 - **LLM**: OpenAI (requires `OPENAI_API_KEY`)
 - **Storage**: Agentuity KV
+- **Sandbox**: Agentuity Sandbox with `opencode:latest` runtime
+
+## Dependencies
+
+- `@agentuity/runtime` - Agentuity agent runtime
+- `@opencode-ai/sdk` - OpenCode SDK (installed but not directly used yet)
+- `openai` - OpenAI API client
 
 ## References
 
 - [Agentuity CLI AGENTS.md](./node_modules/@agentuity/cli/AGENTS.md)
 - [Agentuity Docs](https://agentuity.dev)
+- [OpenCode SDK Docs](https://opencode.ai/docs/sdk/)
