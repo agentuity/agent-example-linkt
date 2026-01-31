@@ -173,7 +173,6 @@ https://your-project.agentuity.cloud/api/webhook/linkt
 
 | Variable | Description |
 |----------|-------------|
-| `OPENAI_API_KEY` | OpenAI API key for GPT-5-mini |
 | `LINKT_API_KEY` | Linkt API key for fetching signals |
 | `LINKT_ENVIRONMENT` | Optional: `staging` or `production` (default: `staging`) |
 
