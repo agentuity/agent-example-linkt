@@ -21,7 +21,7 @@ const CONFIG = {
 export async function generateLandingPage(
 	ctx: AgentContext<any, any, any>,
 	signal: Signal,
-	entities: LinktEntity[] = []
+	entities: LinktEntity[] = [],
 ): Promise<string | null> {
 	ctx.logger.info('Starting landing page generation', { signalId: signal.id });
 
@@ -87,7 +87,7 @@ export async function generateLandingPage(
 
 async function pollForOutputFile(
 	ctx: AgentContext<any, any, any>,
-	sandbox: Awaited<ReturnType<typeof ctx.sandbox.create>>
+	sandbox: Awaited<ReturnType<typeof ctx.sandbox.create>>,
 ): Promise<string | null> {
 	const startTime = Date.now();
 
@@ -217,7 +217,9 @@ function buildCtaGuidance(entities: LinktEntity[]): string {
 	const company = findCompanyEntity(entities);
 	const contactName = toText(contact?.data?.name);
 	const companyName =
-		toText(company?.data?.name) ?? toText(company?.data?.company_name) ?? toText(contact?.data?.company_name);
+		toText(company?.data?.name) ??
+		toText(company?.data?.company_name) ??
+		toText(contact?.data?.company_name);
 
 	if (contact) {
 		return `Focus the CTA on a direct outreach to ${contactName ?? 'the contact'} at ${companyName ?? 'their company'}, such as booking a 15-minute strategy call or requesting a tailored plan.`;
@@ -232,13 +234,14 @@ function buildCtaGuidance(entities: LinktEntity[]): string {
 
 function findCompanyEntity(entities: LinktEntity[]): LinktEntity | undefined {
 	return entities.find(
-		(entity) =>
-			entity.entity_type === 'company' || typeof entity.data?.company_name === 'string'
+		(entity) => entity.entity_type === 'company' || typeof entity.data?.company_name === 'string',
 	);
 }
 
 function findPersonEntity(entities: LinktEntity[]): LinktEntity | undefined {
-	return entities.find((entity) => entity.entity_type === 'person' || typeof entity.data?.email === 'string');
+	return entities.find(
+		(entity) => entity.entity_type === 'person' || typeof entity.data?.email === 'string',
+	);
 }
 
 function toText(value: unknown): string | undefined {

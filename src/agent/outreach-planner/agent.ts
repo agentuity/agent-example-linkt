@@ -67,9 +67,14 @@ const outreachPlanner = createAgent('outreach-planner', {
 			};
 		}
 
-		const results = await Promise.all(
-			enrichedSignals.map((enrichedSignal) => processEnrichedSignal(ctx, enrichedSignal))
-		);
+		// Process signals sequentially to avoid:
+		// 1. Race condition in index updates (read-modify-write is not atomic)
+		// 2. Resource contention when running multiple sandboxes in parallel
+		const results: Awaited<ReturnType<typeof processEnrichedSignal>>[] = [];
+		for (const enrichedSignal of enrichedSignals) {
+			const result = await processEnrichedSignal(ctx, enrichedSignal);
+			results.push(result);
+		}
 
 		const successful = results.filter((result) => result.success);
 		const failed = results.filter((result) => !result.success);

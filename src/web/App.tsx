@@ -1,45 +1,10 @@
 import { useAPI } from '@agentuity/react';
 import { useCallback, useState, useEffect } from 'react';
 import './App.css';
+import type { GETApiSignalsOutput } from '../generated/routes';
 
-// Types
-interface Signal {
-	id: string;
-	type: string;
-	summary: string;
-	company: string;
-	strength: 'HIGH' | 'MEDIUM' | 'LOW';
-	date: string;
-}
-
-interface Outreach {
-	email: { subject: string; body: string };
-	linkedin: string;
-	twitter: string;
-	callPoints: string[];
-	summary: string;
-}
-
-interface StoredSignal {
-	signal: Signal;
-	outreach: Outreach;
-	generatedAt: string;
-	status: 'pending' | 'generated' | 'error';
-	error?: string;
-	landingPageHtml?: string;
-}
-
-interface SignalListResponse {
-	signals: StoredSignal[];
-	total: number;
-}
-
-interface UseAPIResponse {
-	data: SignalListResponse | undefined;
-	isLoading: boolean;
-	error: Error | null;
-	refetch: () => Promise<void>;
-}
+// Frontend type derived from the API response schema
+type StoredSignal = GETApiSignalsOutput['signals'][number];
 
 // Signal type colors
 const SIGNAL_COLORS: Record<string, string> = {
@@ -80,7 +45,11 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 	);
 }
 
-function SignalCard({ stored, isExpanded, onToggle }: {
+function SignalCard({
+	stored,
+	isExpanded,
+	onToggle,
+}: {
 	stored: StoredSignal;
 	isExpanded: boolean;
 	onToggle: () => void;
@@ -147,7 +116,10 @@ function SignalCard({ stored, isExpanded, onToggle }: {
 							<div>
 								<h4 className="text-sm text-gray-400 mb-2 flex items-center justify-between">
 									Email Draft
-									<CopyButton text={`Subject: ${outreach.email.subject}\n\n${outreach.email.body}`} label="Copy Email" />
+									<CopyButton
+										text={`Subject: ${outreach.email.subject}\n\n${outreach.email.body}`}
+										label="Copy Email"
+									/>
 								</h4>
 								<div className="bg-gray-900 rounded p-3 border border-gray-800 space-y-2">
 									<p className="text-cyan-400 text-sm">
@@ -200,20 +172,37 @@ function SignalCard({ stored, isExpanded, onToggle }: {
 								<div>
 									<h4 className="text-sm text-gray-400 mb-2 flex items-center justify-between">
 										Landing Page
-										<CopyButton text={`${window.location.origin}/api/landing/${signal.id}`} label="Copy URL" />
+										<CopyButton
+											text={`${window.location.origin}/api/landing/${signal.id}`}
+											label="Copy URL"
+										/>
 									</h4>
 									<div className="bg-gradient-to-r from-cyan-900/30 to-purple-900/30 rounded p-4 border border-cyan-800/50">
 										<div className="flex items-center justify-between">
 											<div className="flex items-center gap-3">
 												<div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
-													<svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<svg
+														className="w-5 h-5 text-cyan-400"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+													>
 														<title>Globe icon</title>
-														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+														<path
+															strokeLinecap="round"
+															strokeLinejoin="round"
+															strokeWidth={2}
+															d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+														/>
 													</svg>
 												</div>
 												<div>
-													<p className="text-white text-sm font-medium">AI-Generated Landing Page</p>
-													<p className="text-gray-400 text-xs">Powered by Agentuity Sandbox + GPT</p>
+													<p className="text-white text-sm font-medium">
+														AI-Generated Landing Page
+													</p>
+													<p className="text-gray-400 text-xs">
+														Powered by Agentuity Sandbox + GPT
+													</p>
 												</div>
 											</div>
 											<a
@@ -223,9 +212,19 @@ function SignalCard({ stored, isExpanded, onToggle }: {
 												className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
 											>
 												View Page
-												<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<svg
+													className="w-4 h-4"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
 													<title>External link icon</title>
-													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+														d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+													/>
 												</svg>
 											</a>
 										</div>
@@ -252,10 +251,7 @@ export function App() {
 	const [expandedId, setExpandedId] = useState<string | null>(null);
 
 	// Fetch signals
-	const { data, isLoading, error, refetch } = useAPI({
-		method: 'GET',
-		path: '/api/signals',
-	}) as unknown as UseAPIResponse;
+	const { data, isLoading, error, refetch } = useAPI('GET /api/signals');
 
 	// Auto-refresh every 10 seconds
 	useEffect(() => {
@@ -287,7 +283,12 @@ export function App() {
 						type="button"
 					>
 						<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+							/>
 						</svg>
 						Refresh
 					</button>
@@ -314,8 +315,18 @@ export function App() {
 				{!isLoading && !error && data?.signals.length === 0 && (
 					<div className="bg-black border border-gray-800 rounded-lg p-12 text-center">
 						<div className="text-gray-500 mb-4">
-							<svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M13 10V3L4 14h7v7l9-11h-7z" />
+							<svg
+								className="w-16 h-16 mx-auto mb-4 opacity-50"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={1}
+									d="M13 10V3L4 14h7v7l9-11h-7z"
+								/>
 							</svg>
 							<p className="text-lg">No signals yet</p>
 							<p className="text-sm mt-2">Waiting for signals from Linkt webhooks...</p>
@@ -327,7 +338,9 @@ export function App() {
 				{data?.signals && data.signals.length > 0 && (
 					<div className="space-y-3">
 						<div className="flex items-center justify-between text-sm text-gray-500">
-							<span>{data.total} signal{data.total !== 1 ? 's' : ''}</span>
+							<span>
+								{data.total} signal{data.total !== 1 ? 's' : ''}
+							</span>
 							<span>Click to expand</span>
 						</div>
 						{data.signals.map((stored) => (
@@ -335,7 +348,9 @@ export function App() {
 								key={stored.signal.id}
 								stored={stored}
 								isExpanded={expandedId === stored.signal.id}
-								onToggle={() => setExpandedId(expandedId === stored.signal.id ? null : stored.signal.id)}
+								onToggle={() =>
+									setExpandedId(expandedId === stored.signal.id ? null : stored.signal.id)
+								}
 							/>
 						))}
 					</div>

@@ -25,7 +25,7 @@ const linkt = new Linkt({
 
 export async function fetchSignal(
 	signalId: string,
-	logger?: LoggerLike
+	logger?: LoggerLike,
 ): Promise<EnrichedSignal | null> {
 	try {
 		const linktSignal = await linkt.signal.retrieve(signalId);
@@ -48,7 +48,7 @@ export async function fetchSignal(
 
 export async function fetchEntities(
 	entityIds: string[],
-	logger?: LoggerLike
+	logger?: LoggerLike,
 ): Promise<LinktEntity[]> {
 	if (!entityIds?.length) {
 		return [];
@@ -58,7 +58,7 @@ export async function fetchEntities(
 		entityIds.map(async (entityId) => ({
 			entityId,
 			entity: await linkt.entity.retrieve(entityId),
-		}))
+		})),
 	);
 
 	const entities: LinktEntity[] = [];
@@ -79,7 +79,7 @@ export async function fetchEntities(
 
 export async function processSignalWebhook(
 	webhookData: LinktWebhookPayload,
-	logger?: LoggerLike
+	logger?: LoggerLike,
 ): Promise<EnrichedSignal[]> {
 	const signalIds = webhookData?.data?.resources?.signals_created ?? [];
 
@@ -135,7 +135,7 @@ function resolveCompanyName(entities: LinktEntity[]): string | null {
 	const companyEntity = entities.find(
 		(entity) =>
 			entity.entity_type === 'company' ||
-			(typeof entity.data?.company_name === 'string' && entity.data.company_name.length > 0)
+			(typeof entity.data?.company_name === 'string' && entity.data.company_name.length > 0),
 	);
 
 	const personEntity = entities.find((entity) => entity.entity_type === 'person');

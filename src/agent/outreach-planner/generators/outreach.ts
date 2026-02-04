@@ -7,7 +7,7 @@ const openai = new OpenAI();
 
 export async function generateOutreach(
 	signal: Signal,
-	entities: LinktEntity[] = []
+	entities: LinktEntity[] = [],
 ): Promise<Outreach> {
 	const entityContext = buildEntityContext(entities);
 	const ctaGuidance = buildCtaGuidance(entities);
@@ -112,7 +112,9 @@ function buildCtaGuidance(entities: LinktEntity[]): string {
 	const company = findCompanyEntity(entities);
 	const contactName = toText(contact?.data?.name);
 	const companyName =
-		toText(company?.data?.name) ?? toText(company?.data?.company_name) ?? toText(contact?.data?.company_name);
+		toText(company?.data?.name) ??
+		toText(company?.data?.company_name) ??
+		toText(contact?.data?.company_name);
 
 	if (contact) {
 		return `Target a direct conversation with ${contactName ?? 'the contact'} about ${companyName ?? 'their team'}'s current priorities. Offer a short intro call and a tailored insight.`;
@@ -127,13 +129,14 @@ function buildCtaGuidance(entities: LinktEntity[]): string {
 
 function findCompanyEntity(entities: LinktEntity[]): LinktEntity | undefined {
 	return entities.find(
-		(entity) =>
-			entity.entity_type === 'company' || typeof entity.data?.company_name === 'string'
+		(entity) => entity.entity_type === 'company' || typeof entity.data?.company_name === 'string',
 	);
 }
 
 function findPersonEntity(entities: LinktEntity[]): LinktEntity | undefined {
-	return entities.find((entity) => entity.entity_type === 'person' || typeof entity.data?.email === 'string');
+	return entities.find(
+		(entity) => entity.entity_type === 'person' || typeof entity.data?.email === 'string',
+	);
 }
 
 function toText(value: unknown): string | undefined {
